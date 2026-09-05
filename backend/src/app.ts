@@ -53,8 +53,11 @@ app.get(['/api/bot/setup', '/bot/setup'], async (req, res) => {
   }
 })
 
-// Telegram Bot Webhook endpoint
-app.use(['/api/bot', '/bot'], webhookCallback(bot, 'express'))
+// Telegram Bot Webhook endpoint (serverless / production webhook mode)
+const isVercel = Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production'
+if (isVercel || process.env.USE_WEBHOOK === 'true') {
+  app.use(['/api/bot', '/bot'], webhookCallback(bot, 'express'))
+}
 
 // API Routes
 app.use(['/api/auth', '/auth'], authRouter)
