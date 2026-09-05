@@ -474,6 +474,24 @@ adminRouter.put('/couriers/:id', async (req, res): Promise<void> => {
   }
 })
 
+adminRouter.delete('/couriers/:id', async (req, res): Promise<void> => {
+  try {
+    // Unlink courier from any active orders
+    await prisma.order.updateMany({
+      where: { courierId: req.params.id },
+      data: { courierId: null },
+    })
+
+    await prisma.courier.delete({
+      where: { id: req.params.id },
+    })
+
+    res.json({ success: true, message: "Kuryer muvaffaqiyatli o'chirildi" })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+})
+
 /**
  * Customers List
  */
