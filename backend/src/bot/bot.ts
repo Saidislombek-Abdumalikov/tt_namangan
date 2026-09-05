@@ -1,0 +1,706 @@
+import { Bot, Keyboard, InlineKeyboard } from 'grammy'
+import fs from 'fs'
+import path from 'path'
+import { config } from '../config'
+import { prisma } from '../database'
+import { OrderService } from '../services/orderService'
+import { TelegramNotifier, getOrderKeyboard, formatOrderMessage } from '../services/telegramNotifier'
+import { OrderStatus } from '@prisma/client'
+
+// Instantiate bot with token
+export const bot = new Bot(config.botToken || '8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE')
+
+// Global error handler so the bot never terminates on an unhandled exception
+bot.catch(err => {
+  console.error(`Error in bot while handling update ${err.ctx?.update?.update_id}:`, err.error)
+})
+
+// Persistent Local User Cache so the bot works seamlessly in any environment
+export interface BotUserData {
+  telegramId: number
+  firstName: string
+  lastName?: string
+  username?: string
+  phone?: string
+  address?: string
+  lat?: number
+  lng?: number
+  step?: 'awaiting_phone' | 'awaiting_location' | 'registered'
+}
+
+const DATA_DIR = path.resolve(__dirname, '../../data')
+const USERS_FILE = path.join(DATA_DIR, 'bot_users.json')
+
+function loadBotUsers(): Record<string, BotUserData> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, 'utf-8')
+      return JSON.parse(raw)
+    }
+  } catch (err) {
+    console.warn('Could not read bot_users.json:', err)
+  }
+  return {}
+}
+
+const userStore: Record<string, BotUserData> = loadBotUsers()
+
+function saveBotUser(user: BotUserData) {
+  userStore[String(user.telegramId)] = user
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    fs.writeFileSync(USERS_FILE, JSON.stringify(userStore, null, 2), 'utf-8')
+  } catch (err) {
+    console.warn('Could not write bot_users.json:', err)
+  }
+}
+
+export function buildWebAppUrl(data: BotUserData): string {
+  const baseUrl = config.webAppUrl || 'http://localhost:8443'
+  try {
+    const url = new URL(baseUrl)
+    if (data.phone) url.searchParams.set('phone', data.phone)
+    if (data.address) url.searchParams.set('address', data.address)
+    if (data.lat) url.searchParams.set('lat', String(data.lat))
+    if (data.lng) url.searchParams.set('lng', String(data.lng))
+    if (data.firstName) url.searchParams.set('name', data.firstName)
+    return url.toString()
+  } catch (e) {
+    const params: string[] = []
+    if (data.phone) params.push(`phone=${encodeURIComponent(data.phone)}`)
+    if (data.address) params.push(`address=${encodeURIComponent(data.address)}`)
+    if (data.lat) params.push(`lat=${data.lat}`)
+    if (data.lng) params.push(`lng=${data.lng}`)
+    if (data.firstName) params.push(`name=${encodeURIComponent(data.firstName)}`)
+    return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl
+  }
+}
+
+function getPhoneKeyboard() {
+  return new Keyboard()
+    .requestContact('📱 Telefon raqamni yuborish')
+    .row()
+    .text('⬅️ Bekor qilish')
+    .resized()
+    .oneTime()
+}
+
+function getLocationKeyboard() {
+  return new Keyboard()
+    .requestLocation('📍 Joylashuvni yuborish')
+    .row()
+    .text('➡️ Keyinroq kiritish')
+    .text('⬅️ Bekor qilish')
+    .resized()
+    .oneTime()
+}
+
+function getMainMenuKeyboard(userData: BotUserData) {
+  const webAppUrl = buildWebAppUrl(userData)
+  const isHttps = webAppUrl.startsWith('https://')
+  const kb = new Keyboard()
+
+  if (isHttps) {
+    kb.webApp('🍽 Buyurtma berish', webAppUrl)
+  } else {
+    kb.text('🍽 Buyurtma berish')
+  }
+
+  return kb
+    .row()
+    .text('📦 Buyurtmalarim')
+    .text('📍 Manzilni yangilash')
+    .row()
+    .text('📱 Raqamni yangilash')
+    .text('☎️ Yordam')
+    .resized()
+}
+
+// 1. /start command
+bot.command('start', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+
+  // Sync to database if available
+  try {
+    await prisma.user.upsert({
+      where: { telegramId: BigInt(user.id) },
+      update: {
+        firstName: user.first_name,
+        lastName: user.last_name || null,
+        username: user.username || null,
+        phone: userData.phone || null,
+      },
+      create: {
+        telegramId: BigInt(user.id),
+        firstName: user.first_name,
+        lastName: user.last_name || null,
+        username: user.username || null,
+        phone: userData.phone || null,
+      },
+    })
+  } catch (err) {
+    // Graceful fallback for local development without active PostgreSQL
+  }
+
+  // Case A: User has not provided phone number yet
+  if (!userData.phone) {
+    userData.step = 'awaiting_phone'
+    saveBotUser(userData)
+
+    const promptText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>TT Namangan — Milliy va Fast Food</b> yetkazib berish xizmati botiga xush kelibsiz!\n\nBuyurtma berishni boshlash uchun, iltimos, avval telefon raqamingizni yuboring (quyidagi tugmani bosing):`
+
+    await ctx.reply(promptText, {
+      parse_mode: 'HTML',
+      reply_markup: getPhoneKeyboard(),
+    })
+    return
+  }
+
+  // Case B: User has phone but not location
+  if (!userData.address && !userData.lat) {
+    userData.step = 'awaiting_location'
+    saveBotUser(userData)
+
+    const promptLocation = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\nTelefon raqamingiz: <b>${userData.phone}</b> ✅\n\nTaomlarni yetkazib berishimiz uchun, iltimos, joylashuvingizni (geolokatsiya) yuboring yoki manzilni yozma xabar sifatida yuboring:`
+
+    await ctx.reply(promptLocation, {
+      parse_mode: 'HTML',
+      reply_markup: getLocationKeyboard(),
+    })
+    return
+  }
+
+  // Case C: User is fully registered
+  userData.step = 'registered'
+  saveBotUser(userData)
+
+  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>TT Namangan</b> yetkazib berish xizmati bilan eng sara to'y oshi, shashliklar, somsa va fast food taomlarini tezkor buyurtma qilishingiz mumkin.\n\n📱 Telefon: <b>${userData.phone}</b>\n📍 Manzil: <b>${userData.address || 'Namangan shahri'}</b>\n\nMenyuni ochish va buyurtma berish uchun quyidagi tugmani bosing:`
+
+  await ctx.reply(welcomeText, {
+    parse_mode: 'HTML',
+    reply_markup: getMainMenuKeyboard(userData),
+  })
+
+  // Try updating the chat menu button so it persistently displays next to the input
+  const appUrl = buildWebAppUrl(userData)
+  if (appUrl.startsWith('https://')) {
+    try {
+      await ctx.api.setChatMenuButton({
+        chat_id: user.id,
+        menu_button: {
+          type: 'web_app',
+          text: '🍽 Buyurtma berish',
+          web_app: { url: appUrl },
+        },
+      })
+    } catch (e) {
+      // Ignore if not supported in test environment
+    }
+  }
+})
+
+// 2. Handle Contact (Phone Number)
+bot.on('message:contact', async ctx => {
+  const contact = ctx.message.contact
+  const user = ctx.from
+  if (!contact || !user) return
+
+  let phone = contact.phone_number.trim()
+  if (!phone.startsWith('+')) {
+    phone = '+' + phone
+  }
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+
+  userData.phone = phone
+  userData.step = 'awaiting_location'
+  saveBotUser(userData)
+
+  // Sync to database
+  try {
+    await prisma.user.update({
+      where: { telegramId: BigInt(user.id) },
+      data: { phone },
+    })
+  } catch (e) {
+    // Ignore
+  }
+
+  const text = `✅ Telefon raqamingiz qabul qilindi: <b>${phone}</b>\n\nEndi esa taomlarni qayerga yetkazib berishimiz kerak?\nIltimos, pastdagi tugma orqali joylashuvingizni (geolokatsiyani) yuboring yoki manzilni yozma xabar qilib yuboring:`
+
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    reply_markup: getLocationKeyboard(),
+  })
+})
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: { 'User-Agent': 'TTNamanganBot/1.0' },
+        signal: controller.signal,
+      }
+    )
+    clearTimeout(timer)
+    if (res.ok) {
+      const data = (await res.json()) as any
+      const addr = data.address
+      if (addr) {
+        const parts: string[] = []
+        if (addr.road) parts.push(addr.road)
+        if (addr.house_number) parts.push(`${addr.house_number}-uy`)
+        if (addr.suburb || addr.neighbourhood) parts.push(addr.suburb || addr.neighbourhood)
+        if (addr.city || addr.town || addr.county) parts.push(addr.city || addr.town || addr.county)
+        if (parts.length > 0) {
+          return parts.join(', ')
+        }
+      }
+      if (data.display_name) {
+        return data.display_name.split(',').slice(0, 3).join(',').trim()
+      }
+    }
+  } catch (err) {
+    // Fallback to coordinates
+  }
+  return `Namangan sh., Joylashuv (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+}
+
+// 3. Handle Location
+bot.on('message:location', async ctx => {
+  const loc = ctx.message.location
+  const user = ctx.from
+  if (!loc || !user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+
+  userData.lat = loc.latitude
+  userData.lng = loc.longitude
+
+  // Reverse geocode location to get human-readable street / district
+  const readableAddress = await reverseGeocode(loc.latitude, loc.longitude)
+  userData.address = readableAddress
+  userData.step = 'registered'
+  saveBotUser(userData)
+
+  const successText = `🎉 <b>Yetkazib berish manzilingiz belgilandi!</b>\n\n📍 Manzil: <b>${userData.address}</b>\n📱 Telefon: <b>${userData.phone || "Qayd etilgan"}</b>\n\nMenyuni ochish va buyurtma berish uchun quyidagi <b>🍽 Buyurtma berish</b> tugmasini bosing:`
+
+  await ctx.reply(successText, {
+    parse_mode: 'HTML',
+    reply_markup: getMainMenuKeyboard(userData),
+  })
+
+  const appUrl = buildWebAppUrl(userData)
+  if (appUrl.startsWith('https://')) {
+    try {
+      await ctx.api.setChatMenuButton({
+        chat_id: user.id,
+        menu_button: {
+          type: 'web_app',
+          text: '🍽 Buyurtma berish',
+          web_app: { url: appUrl },
+        },
+      })
+    } catch (e) {
+      // Ignore
+    }
+  }
+})
+
+// 4. Handle "Keyinroq kiritish"
+bot.hears('➡️ Keyinroq kiritish', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+
+  if (!userData.address) {
+    userData.address = 'Namangan shahri'
+  }
+  userData.step = 'registered'
+  saveBotUser(userData)
+
+  const text = `Tushunarli! Manzilingiz <b>${userData.address}</b> qilib belgilandi. Istalgan vaqtda manzilni yozma xabar yuborib yangilashingiz mumkin.\n\nMenyuni ko'rish uchun quyidagi tugmani bosing:`
+
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    reply_markup: getMainMenuKeyboard(userData),
+  })
+})
+
+// Handle "Bekor qilish"
+bot.hears('⬅️ Bekor qilish', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+  userData.step = 'registered'
+  saveBotUser(userData)
+
+  await ctx.reply('Bosh menyu:', {
+    reply_markup: getMainMenuKeyboard(userData),
+  })
+})
+
+// 5. Handle "Manzilni yangilash"
+bot.hears('📍 Manzilni yangilash', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+  userData.step = 'awaiting_location'
+  saveBotUser(userData)
+
+  const currentAddr = userData.address ? `\n\n<i>Hozirgi manzilingiz:</i> <b>${userData.address}</b>` : ''
+
+  await ctx.reply(
+    `📍 <b>Yetkazib berish manzilini yangilash</b>${currentAddr}\n\nQuyidagi usullardan birini tanlang:\n1️⃣ Pastdagi <b>📍 Joylashuvni yuborish</b> tugmasini bosing (geolokatsiya)\n2️⃣ Yoki yangi manzilingizni (ko'cha, uy raqami yoki mo'ljal) <b>yozma xabar</b> qilib yuboring (masalan: <i>Boburshoh ko'chasi 24-uy</i>):`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: getLocationKeyboard(),
+    }
+  )
+})
+
+// 6. Handle "Raqamni yangilash"
+bot.hears('📱 Raqamni yangilash', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+  userData.step = 'awaiting_phone'
+  saveBotUser(userData)
+
+  const currentPhone = userData.phone ? `\n\n<i>Hozirgi raqam:</i> <b>${userData.phone}</b>` : ''
+
+  await ctx.reply(
+    `📱 <b>Telefon raqamini yangilash</b>${currentPhone}\n\nQuyidagi tugma orqali yangi telefon raqamingizni yuboring yoki raqamni yozma ravishda yuboring:`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: getPhoneKeyboard(),
+    }
+  )
+})
+
+// Handle "Buyurtma berish" button pressed as regular text
+bot.hears('🍽 Buyurtma berish', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+  const webAppUrl = buildWebAppUrl(userData)
+  const isHttps = webAppUrl.startsWith('https://')
+  const kb = new InlineKeyboard()
+  if (isHttps) {
+    kb.webApp('🍽 Menyuni ochish', webAppUrl)
+  } else {
+    kb.url('🍽 Menyuni ochish', webAppUrl)
+  }
+  await ctx.reply(
+    `🍽 <b>TT Namangan — Taomlar Menyusi</b>\n\n📱 Telefon: <b>${userData.phone || 'Kiritilmagan'}</b>\n📍 Manzil: <b>${userData.address || 'Namangan shahri'}</b>\n\nIlovani ochish uchun quyidagi tugmani bosing:`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: kb,
+    }
+  )
+})
+
+// 7. Handle text messages (address typing & typed phone numbers)
+bot.on('message:text', async (ctx, next) => {
+  const text = ctx.message.text.trim()
+  const user = ctx.from
+  if (!user) return next()
+
+  // Skip commands and known menu buttons
+  const knownButtons = [
+    '📦 Buyurtmalarim',
+    '📍 Manzilni yangilash',
+    '📱 Raqamni yangilash',
+    '☎️ Yordam',
+    '➡️ Keyinroq kiritish',
+    '⬅️ Bekor qilish',
+    '🍽 Buyurtma berish',
+    '📍 Joylashuvni yuborish',
+    '📱 Telefon raqamni yuborish',
+  ]
+  if (text.startsWith('/') || knownButtons.includes(text)) {
+    return next()
+  }
+
+  let userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.username,
+  }
+
+  // Check if text looks like a phone number (e.g. +998901234567, 901234567, etc.)
+  const cleanPhone = text.replace(/[\s\-()]/g, '')
+  const isPhoneNumber = /^(\+?998)?[0-9]{9}$/.test(cleanPhone) || /^[0-9]{9,13}$/.test(cleanPhone)
+
+  if (isPhoneNumber && (!userData.phone || userData.step === 'awaiting_phone')) {
+    let formatted = cleanPhone
+    if (!formatted.startsWith('+')) {
+      if (formatted.startsWith('998')) formatted = '+' + formatted
+      else formatted = '+998' + formatted
+    }
+    userData.phone = formatted
+    userData.step = 'awaiting_location'
+    saveBotUser(userData)
+
+    try {
+      await prisma.user.update({
+        where: { telegramId: BigInt(user.id) },
+        data: { phone: formatted },
+      })
+    } catch {}
+
+    const promptLocation = `✅ Telefon raqamingiz saqlandi: <b>${formatted}</b>\n\nEndi esa taomlarni qayerga yetkazib berishimiz kerak?\n\nIltimos, pastdagi tugma orqali joylashuvingizni (geolokatsiyani) yuboring yoki manzilni yozma xabar qilib yuboring:`
+
+    await ctx.reply(promptLocation, {
+      parse_mode: 'HTML',
+      reply_markup: getLocationKeyboard(),
+    })
+    return
+  }
+
+  // Otherwise, ANY text is treated as an address update!
+  userData.address = text
+  userData.step = 'registered'
+  saveBotUser(userData)
+
+  try {
+    await prisma.user.update({
+      where: { telegramId: BigInt(user.id) },
+      data: { phone: userData.phone || null },
+    })
+  } catch {}
+
+  const successMsg = `✅ <b>Yetkazib berish manzilingiz muvaffaqiyatli saqlandi!</b>\n\n📍 Manzil: <b>${text}</b>\n📱 Telefon: <b>${userData.phone || 'Qayd etilgan'}</b>\n\nMenyuni ko'rish va buyurtma berish uchun pastdagi <b>🍽 Buyurtma berish</b> tugmasini bosing:`
+
+  await ctx.reply(successMsg, {
+    parse_mode: 'HTML',
+    reply_markup: getMainMenuKeyboard(userData),
+  })
+
+  const appUrl = buildWebAppUrl(userData)
+  if (appUrl.startsWith('https://')) {
+    try {
+      await ctx.api.setChatMenuButton({
+        chat_id: user.id,
+        menu_button: {
+          type: 'web_app',
+          text: '🍽 Buyurtma berish',
+          web_app: { url: appUrl },
+        },
+      })
+    } catch (e) {}
+  }
+})
+
+// 8. Buyurtmalarim
+bot.hears('📦 Buyurtmalarim', async ctx => {
+  const user = ctx.from
+  if (!user) return
+
+  const userData = userStore[String(user.id)] || {
+    telegramId: user.id,
+    firstName: user.first_name,
+  }
+  const webAppUrl = buildWebAppUrl(userData)
+
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { telegramId: BigInt(user.id) },
+      include: {
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+          include: { items: true },
+        },
+      },
+    })
+
+    const isHttps = webAppUrl.startsWith('https://')
+    if (!dbUser || dbUser.orders.length === 0) {
+      const kb = new InlineKeyboard()
+      if (isHttps) {
+        kb.webApp('🍽 Buyurtma berish', webAppUrl)
+      } else {
+        kb.url('🍽 Buyurtma berish', webAppUrl)
+      }
+      await ctx.reply(
+        "Sizda hali buyurtmalar mavjud emas. Buyurtma berish uchun quyidagi '🍽 Buyurtma berish' tugmasini bosing!",
+        { reply_markup: kb }
+      )
+      return
+    }
+
+    let msg = '<b>Sizning oxirgi buyurtmalaringiz:</b>\n\n'
+    for (const ord of dbUser.orders) {
+      msg += `📦 <b>#${ord.orderNumber}</b> — ${ord.total.toLocaleString('uz-UZ')} so'm\n`
+      msg += `Holat: <i>${ord.status}</i> | Sana: ${new Date(ord.createdAt).toLocaleDateString('uz-UZ')}\n\n`
+    }
+
+    const kb = new InlineKeyboard()
+    if (isHttps) {
+      kb.webApp('📱 Ilovani ochish', webAppUrl)
+    } else {
+      kb.url('📱 Ilovani ochish', webAppUrl)
+    }
+
+    await ctx.reply(msg, {
+      parse_mode: 'HTML',
+      reply_markup: kb,
+    })
+  } catch (e) {
+    const isHttps = webAppUrl.startsWith('https://')
+    const kb = new InlineKeyboard()
+    if (isHttps) {
+      kb.webApp('📱 Ilovani ochish', webAppUrl)
+    } else {
+      kb.url('📱 Ilovani ochish', webAppUrl)
+    }
+    await ctx.reply(
+      "Buyurtmalar tarixini ko'rish uchun quyidagi tugma orqali ilovani oching:",
+      { reply_markup: kb }
+    )
+  }
+})
+
+// 9. Yordam
+bot.hears('☎️ Yordam', async ctx => {
+  const text = `☎️ <b>Bog'lanish va qo'llab-quvvatlash:</b>\n\n• Operator telefoni: +998 90 123 45 67\n• Admin bilan aloqa: @admin_namangan\n• Ish vaqti: 09:00 dan 23:00 gacha har kuni\n\nSavol va takliflaringiz bo'lsa, xush kelibsiz!`
+  await ctx.reply(text, { parse_mode: 'HTML' })
+})
+
+// 10. Operational Group Callbacks (for staff and couriers)
+bot.on('callback_query:data', async ctx => {
+  const data = ctx.callbackQuery.data
+  const staffName = ctx.from?.first_name || 'Staff'
+
+  // A. Status change: order_status:<orderId>:<newStatus>
+  if (data.startsWith('order_status:')) {
+    const [, orderId, newStatus] = data.split(':')
+    try {
+      const updatedOrder = await OrderService.updateOrderStatus(
+        orderId,
+        newStatus as OrderStatus,
+        staffName
+      )
+
+      await ctx.answerCallbackQuery({ text: `Holat yangilandi: ${newStatus}` })
+
+      // Update group message
+      await TelegramNotifier.updateGroupOrderMessage(updatedOrder)
+
+      // Notify customer in private chat
+      await TelegramNotifier.notifyCustomer(
+        updatedOrder.user.telegramId,
+        updatedOrder.orderNumber,
+        updatedOrder.status
+      )
+    } catch (err: any) {
+      console.error('Callback error:', err)
+      await ctx.answerCallbackQuery({ text: `Xatolik: ${err.message}`, show_alert: true })
+    }
+  }
+
+  // B. Courier Menu: order_courier_menu:<orderId>
+  else if (data.startsWith('order_courier_menu:')) {
+    const [, orderId] = data.split(':')
+    try {
+      const couriers = await prisma.courier.findMany({ where: { isActive: true } })
+      if (couriers.length === 0) {
+        await ctx.answerCallbackQuery({
+          text: 'Faol kuryerlar topilmadi.',
+          show_alert: true,
+        })
+        return
+      }
+
+      const kb = new InlineKeyboard()
+      for (const c of couriers) {
+        kb.text(`🚴 ${c.name}`, `order_assign:${orderId}:${c.id}`).row()
+      }
+      kb.text('⬅️ Orqaga', `order_status:${orderId}:ACCEPTED`)
+
+      await ctx.editMessageReplyMarkup({ reply_markup: kb })
+      await ctx.answerCallbackQuery()
+    } catch (err: any) {
+      await ctx.answerCallbackQuery({ text: err.message, show_alert: true })
+    }
+  }
+
+  // C. Courier Assign: order_assign:<orderId>:<courierId>
+  else if (data.startsWith('order_assign:')) {
+    const [, orderId, courierId] = data.split(':')
+    try {
+      const updatedOrder = await OrderService.assignCourier(orderId, courierId, staffName)
+      await ctx.answerCallbackQuery({ text: `Kuryer biriktirildi: ${updatedOrder.courier?.name}` })
+
+      // Update group message
+      await TelegramNotifier.updateGroupOrderMessage(updatedOrder)
+
+      // Notify customer
+      await TelegramNotifier.notifyCustomer(
+        updatedOrder.user.telegramId,
+        updatedOrder.orderNumber,
+        'COURIER_ASSIGNED'
+      )
+    } catch (err: any) {
+      await ctx.answerCallbackQuery({ text: err.message, show_alert: true })
+    }
+  }
+})

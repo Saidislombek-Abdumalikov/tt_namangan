@@ -1,0 +1,147 @@
+import { Router } from 'express'
+import { prisma } from '../database'
+import { OrderService, inMemoryOrders } from '../services/orderService'
+import { TelegramNotifier } from '../services/telegramNotifier'
+import { requireAuth } from '../middleware/auth'
+import { OrderStatus } from '@prisma/client'
+
+export const ordersRouter = Router()
+
+/**
+ * POST /api/orders
+ * Securely creates a new order with server-calculated totals.
+ */
+ordersRouter.post('/', async (req, res): Promise<void> => {
+  try {
+    const { items, address, phone, customerNote, latitude, longitude, userId } = req.body
+
+    let targetUserId = req.user?.id || userId
+    if (!targetUserId) {
+      try {
+        const defaultUser = await prisma.user.upsert({
+          where: { telegramId: BigInt(99890123) },
+          update: {},
+          create: {
+            telegramId: BigInt(99890123),
+            firstName: 'Saidislom',
+            phone: phone || '+998 90 123 45 67',
+          },
+        })
+        targetUserId = defaultUser.id
+      } catch {
+        targetUserId = 'usr-guest-001'
+      }
+    }
+
+    const order = await OrderService.createOrder({
+      userId: targetUserId,
+      items,
+      address,
+      phone,
+      customerNote,
+      latitude,
+      longitude,
+    })
+
+    // Send to restaurant Telegram group if configured
+    try {
+      await TelegramNotifier.sendOrderToGroup(order)
+    } catch {
+      // Ignored if telegram token not active
+    }
+
+    res.status(201).json(order)
+  } catch (error: any) {
+    console.error('Order creation error:', error)
+    res.status(400).json({ error: error.message || 'Buyurtma yaratishda xatolik yuz berdi' })
+  }
+})
+
+/**
+ * GET /api/orders
+ * Retrieves orders for the authenticated user.
+ */
+ordersRouter.get('/', requireAuth, async (req, res): Promise<void> => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: true,
+        courier: true,
+      },
+    })
+
+    res.json(orders)
+  } catch {
+    const fallbackOrders = Array.from(inMemoryOrders.values()).filter(
+      (o: any) => o.userId === req.user!.id || o.userId === 'usr-guest-001'
+    )
+    res.json(fallbackOrders)
+  }
+})
+
+/**
+ * GET /api/orders/:id
+ * Retrieves order details and tracking status.
+ */
+ordersRouter.get('/:id', async (req, res): Promise<void> => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: {
+        items: true,
+        courier: true,
+        statusHistory: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    })
+
+    if (order) {
+      res.json(order)
+      return
+    }
+  } catch {
+    // Database unavailable, try in-memory store
+  }
+
+  const memOrder = inMemoryOrders.get(req.params.id)
+  if (memOrder) {
+    res.json(memOrder)
+    return
+  }
+
+  res.status(404).json({ error: 'Buyurtma topilmadi' })
+})
+
+/**
+ * PATCH /api/orders/:id/status
+ * Updates status of an order and notifies customer.
+ */
+ordersRouter.patch('/:id/status', async (req, res): Promise<void> => {
+  try {
+    const { status, note, changedBy } = req.body
+
+    const updated = await OrderService.updateOrderStatus(
+      req.params.id,
+      status as OrderStatus,
+      changedBy || 'STAFF',
+      note
+    )
+
+    // Update group message
+    await TelegramNotifier.updateGroupOrderMessage(updated)
+
+    // Notify customer
+    await TelegramNotifier.notifyCustomer(
+      updated.user.telegramId,
+      updated.orderNumber,
+      updated.status
+    )
+
+    res.json(updated)
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+})

@@ -1,0 +1,154 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  COURIER
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  COURIER_ASSIGNED
+  PICKED_UP
+  DELIVERING
+  DELIVERED
+  CANCELLED
+  PROBLEM
+}
+
+model User {
+  id         String     @id @default(uuid())
+  telegramId BigInt     @unique
+  firstName  String
+  lastName   String?
+  username   String?
+  phone      String?
+  role       Role       @default(CUSTOMER)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  orders     Order[]
+  favorites  Favorite[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  description String?
+  emoji       String?
+  image       String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id              String          @id @default(uuid())
+  categoryId      String
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  description     String
+  ingredients     String[]
+  image           String
+  price           Int
+  oldPrice        Int?
+  discount        Int?
+  inStock         Boolean         @default(true)
+  preparationTime Int?
+  sortOrder       Int             @default(0)
+  options         ProductOption[]
+  orderItems      OrderItem[]
+  favorites       Favorite[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model ProductOption {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  price     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id                String               @id @default(uuid())
+  orderNumber       String               @unique
+  userId            String
+  user              User                 @relation(fields: [userId], references: [id])
+  courierId         String?
+  courier           Courier?             @relation(fields: [courierId], references: [id])
+  subtotal          Int
+  deliveryFee       Int                  @default(10000)
+  discount          Int                  @default(0)
+  total             Int
+  status            OrderStatus          @default(PENDING)
+  phone             String
+  address           String
+  latitude          Float?
+  longitude         Float?
+  customerNote      String?
+  telegramMessageId Int?
+  items             OrderItem[]
+  statusHistory     OrderStatusHistory[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+model OrderItem {
+  id                  String   @id @default(uuid())
+  orderId             String
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id])
+  productNameSnapshot String
+  priceSnapshot       Int
+  quantity            Int
+  selectedExtras      String[]
+  itemTotal           Int
+}
+
+model Courier {
+  id         String   @id @default(uuid())
+  telegramId BigInt?  @unique
+  name       String
+  phone      String
+  isActive   Boolean  @default(true)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model OrderStatusHistory {
+  id        String       @id @default(uuid())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  oldStatus OrderStatus?
+  newStatus OrderStatus
+  changedBy String
+  note      String?
+  createdAt DateTime     @default(now())
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
