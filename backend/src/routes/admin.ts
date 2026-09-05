@@ -262,6 +262,7 @@ adminRouter.post('/products', async (req, res): Promise<void> => {
   try {
     const {
       categoryId,
+      category: categoryParam,
       name,
       description,
       ingredients,
@@ -274,11 +275,29 @@ adminRouter.post('/products', async (req, res): Promise<void> => {
       options,
     } = req.body
 
+    let resolvedCategoryId = categoryId
+    if (!resolvedCategoryId && categoryParam) {
+      const cat = await prisma.category.findFirst({
+        where: {
+          OR: [
+            { id: categoryParam },
+            { slug: String(categoryParam).toLowerCase() },
+            { name: { contains: String(categoryParam), mode: 'insensitive' } },
+          ],
+        },
+      })
+      if (cat) resolvedCategoryId = cat.id
+    }
+    if (!resolvedCategoryId) {
+      const firstCat = await prisma.category.findFirst()
+      if (firstCat) resolvedCategoryId = firstCat.id
+    }
+
     const product = await prisma.product.create({
       data: {
-        categoryId,
+        categoryId: resolvedCategoryId,
         name,
-        description,
+        description: description || '',
         ingredients: ingredients || [],
         image: image || 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=400&h=300&fit=crop',
         price: Number(price),
@@ -301,6 +320,7 @@ adminRouter.put('/products/:id', async (req, res): Promise<void> => {
   try {
     const {
       categoryId,
+      category: categoryParam,
       name,
       description,
       ingredients,
@@ -312,14 +332,28 @@ adminRouter.put('/products/:id', async (req, res): Promise<void> => {
       preparationTime,
     } = req.body
 
+    let resolvedCategoryId = categoryId
+    if (!resolvedCategoryId && categoryParam) {
+      const cat = await prisma.category.findFirst({
+        where: {
+          OR: [
+            { id: categoryParam },
+            { slug: String(categoryParam).toLowerCase() },
+            { name: { contains: String(categoryParam), mode: 'insensitive' } },
+          ],
+        },
+      })
+      if (cat) resolvedCategoryId = cat.id
+    }
+
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: {
-        categoryId,
-        name,
-        description,
+        ...(resolvedCategoryId ? { categoryId: resolvedCategoryId } : {}),
+        ...(name ? { name } : {}),
+        description: description !== undefined ? description : undefined,
         ingredients: ingredients !== undefined ? ingredients : undefined,
-        image,
+        image: image !== undefined ? image : undefined,
         price: price !== undefined ? Number(price) : undefined,
         oldPrice: oldPrice !== undefined ? (oldPrice ? Number(oldPrice) : null) : undefined,
         discount: discount !== undefined ? (discount ? Number(discount) : null) : undefined,
@@ -337,8 +371,12 @@ adminRouter.put('/products/:id', async (req, res): Promise<void> => {
 
 adminRouter.delete('/products/:id', async (req, res): Promise<void> => {
   try {
-    await prisma.product.delete({ where: { id: req.params.id } })
-    res.json({ success: true, message: "Mahsulot o'chirildi" })
+    const productId = req.params.id
+    await prisma.orderItem.deleteMany({ where: { productId } })
+    await prisma.favorite.deleteMany({ where: { productId } })
+    await prisma.productOption.deleteMany({ where: { productId } })
+    await prisma.product.delete({ where: { id: productId } })
+    res.json({ success: true, message: "Mahsulot muvaffaqiyatli o'chirildi" })
   } catch (error: any) {
     res.status(400).json({ error: error.message })
   }
