@@ -18,9 +18,27 @@ export interface CreateOrderInput {
   longitude?: number
 }
 
-export function generateOrderNumber(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+let lastOrderCounter = 1000
+
+export async function generateOrderNumber(): Promise<string> {
+  try {
+    const lastOrder = await prisma.order.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { orderNumber: true },
+    })
+    if (lastOrder && !isNaN(Number(lastOrder.orderNumber))) {
+      const next = Number(lastOrder.orderNumber) + 1
+      lastOrderCounter = next
+      return String(next)
+    }
+    const count = await prisma.order.count()
+    const next = 1001 + count
+    lastOrderCounter = next
+    return String(next)
+  } catch {
+    lastOrderCounter += 1
+    return String(lastOrderCounter)
+  }
 }
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -144,7 +162,7 @@ export class OrderService {
     const deliveryFee = 10000
     const discount = subtotal > 50000 ? 5000 : 0
     const total = subtotal + deliveryFee - discount
-    const orderNumber = generateOrderNumber()
+    const orderNumber = await generateOrderNumber()
 
     try {
       // Atomic transaction via Prisma
