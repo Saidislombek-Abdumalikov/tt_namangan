@@ -42010,15 +42010,15 @@ async function generateOrderNumber() {
   }
 }
 var VALID_TRANSITIONS = {
-  PENDING: ["ACCEPTED", "CANCELLED", "PROBLEM"],
-  ACCEPTED: ["PREPARING", "COURIER_ASSIGNED", "CANCELLED", "PROBLEM"],
-  PREPARING: ["COURIER_ASSIGNED", "PICKED_UP", "PROBLEM"],
-  COURIER_ASSIGNED: ["PICKED_UP", "DELIVERING", "PROBLEM"],
-  PICKED_UP: ["DELIVERING", "PROBLEM"],
+  PENDING: ["ACCEPTED", "PREPARING", "CANCELLED", "PROBLEM"],
+  ACCEPTED: ["PREPARING", "COURIER_ASSIGNED", "PICKED_UP", "DELIVERING", "CANCELLED", "PROBLEM"],
+  PREPARING: ["COURIER_ASSIGNED", "PICKED_UP", "DELIVERING", "DELIVERED", "PROBLEM"],
+  COURIER_ASSIGNED: ["PICKED_UP", "DELIVERING", "DELIVERED", "PROBLEM"],
+  PICKED_UP: ["DELIVERING", "DELIVERED", "PROBLEM"],
   DELIVERING: ["DELIVERED", "PROBLEM"],
   DELIVERED: [],
   CANCELLED: [],
-  PROBLEM: ["PENDING", "ACCEPTED", "PREPARING", "CANCELLED"]
+  PROBLEM: ["PENDING", "ACCEPTED", "PREPARING", "DELIVERING", "CANCELLED"]
 };
 function isValidStatusTransition(from, to) {
   return VALID_TRANSITIONS[from]?.includes(to) ?? false;
@@ -42208,6 +42208,7 @@ var OrderService = class {
    * Transitions an order's status and logs to OrderStatusHistory.
    */
   static async updateOrderStatus(orderId, newStatus, changedBy, note) {
+    const targetStatus = typeof newStatus === "string" ? newStatus.toUpperCase() : newStatus;
     let currentOrder = null;
     try {
       currentOrder = await prisma.order.findFirst({
@@ -42225,23 +42226,24 @@ var OrderService = class {
     if (!currentOrder) {
       throw new Error("Buyurtma topilmadi.");
     }
-    if (!isValidStatusTransition(currentOrder.status, newStatus)) {
+    const isStaffOrAdmin = changedBy.toUpperCase().includes("ADMIN") || changedBy.toUpperCase().includes("STAFF") || changedBy.toUpperCase().includes("DISPATCHER");
+    if (!isStaffOrAdmin && !isValidStatusTransition(currentOrder.status, targetStatus)) {
       throw new Error(
-        `Noto'g'ri holat o'zgarishi: ${currentOrder.status} -> ${newStatus}`
+        `Noto'g'ri holat o'zgarishi: ${currentOrder.status} -> ${targetStatus}`
       );
     }
     try {
       const updated = await prisma.$transaction(async (tx) => {
         const ord = await tx.order.update({
           where: { id: currentOrder.id },
-          data: { status: newStatus },
+          data: { status: targetStatus },
           include: { user: true, courier: true, items: true }
         });
         await tx.orderStatusHistory.create({
           data: {
             orderId: currentOrder.id,
             oldStatus: currentOrder.status,
-            newStatus,
+            newStatus: targetStatus,
             changedBy,
             note
           }
@@ -42254,15 +42256,15 @@ var OrderService = class {
     } catch (dbErr) {
       console.error("DB error during status update:", dbErr);
       const oldStatus = currentOrder.status;
-      currentOrder.status = newStatus;
+      currentOrder.status = targetStatus;
       currentOrder.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
       currentOrder.statusHistory = currentOrder.statusHistory || [];
       currentOrder.statusHistory.push({
         id: `hist-${currentOrder.statusHistory.length + 1}`,
         oldStatus,
-        newStatus,
+        newStatus: targetStatus,
         changedBy,
-        note: note || `Holat yangilandi: ${newStatus}`,
+        note: note || `Holat yangilandi: ${targetStatus}`,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       });
       inMemoryOrders.set(orderId, currentOrder);

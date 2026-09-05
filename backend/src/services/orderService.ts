@@ -42,15 +42,15 @@ export async function generateOrderNumber(): Promise<string> {
 }
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  PENDING: ['ACCEPTED', 'CANCELLED', 'PROBLEM'],
-  ACCEPTED: ['PREPARING', 'COURIER_ASSIGNED', 'CANCELLED', 'PROBLEM'],
-  PREPARING: ['COURIER_ASSIGNED', 'PICKED_UP', 'PROBLEM'],
-  COURIER_ASSIGNED: ['PICKED_UP', 'DELIVERING', 'PROBLEM'],
-  PICKED_UP: ['DELIVERING', 'PROBLEM'],
+  PENDING: ['ACCEPTED', 'PREPARING', 'CANCELLED', 'PROBLEM'],
+  ACCEPTED: ['PREPARING', 'COURIER_ASSIGNED', 'PICKED_UP', 'DELIVERING', 'CANCELLED', 'PROBLEM'],
+  PREPARING: ['COURIER_ASSIGNED', 'PICKED_UP', 'DELIVERING', 'DELIVERED', 'PROBLEM'],
+  COURIER_ASSIGNED: ['PICKED_UP', 'DELIVERING', 'DELIVERED', 'PROBLEM'],
+  PICKED_UP: ['DELIVERING', 'DELIVERED', 'PROBLEM'],
   DELIVERING: ['DELIVERED', 'PROBLEM'],
   DELIVERED: [],
   CANCELLED: [],
-  PROBLEM: ['PENDING', 'ACCEPTED', 'PREPARING', 'CANCELLED'],
+  PROBLEM: ['PENDING', 'ACCEPTED', 'PREPARING', 'DELIVERING', 'CANCELLED'],
 }
 
 export function isValidStatusTransition(from: string, to: string): boolean {
@@ -268,10 +268,12 @@ export class OrderService {
    */
   static async updateOrderStatus(
     orderId: string,
-    newStatus: OrderStatus,
+    newStatus: OrderStatus | string,
     changedBy: string,
     note?: string
   ) {
+    const targetStatus = (typeof newStatus === 'string' ? newStatus.toUpperCase() : newStatus) as OrderStatus
+
     let currentOrder: any = null
     try {
       currentOrder = await prisma.order.findFirst({
@@ -291,9 +293,14 @@ export class OrderService {
       throw new Error('Buyurtma topilmadi.')
     }
 
-    if (!isValidStatusTransition(currentOrder.status, newStatus)) {
+    const isStaffOrAdmin =
+      changedBy.toUpperCase().includes('ADMIN') ||
+      changedBy.toUpperCase().includes('STAFF') ||
+      changedBy.toUpperCase().includes('DISPATCHER')
+
+    if (!isStaffOrAdmin && !isValidStatusTransition(currentOrder.status, targetStatus)) {
       throw new Error(
-        `Noto'g'ri holat o'zgarishi: ${currentOrder.status} -> ${newStatus}`
+        `Noto'g'ri holat o'zgarishi: ${currentOrder.status} -> ${targetStatus}`
       )
     }
 
@@ -301,7 +308,7 @@ export class OrderService {
       const updated = await prisma.$transaction(async tx => {
         const ord = await tx.order.update({
           where: { id: currentOrder.id },
-          data: { status: newStatus },
+          data: { status: targetStatus },
           include: { user: true, courier: true, items: true },
         })
 
@@ -309,7 +316,7 @@ export class OrderService {
           data: {
             orderId: currentOrder.id,
             oldStatus: currentOrder.status,
-            newStatus,
+            newStatus: targetStatus,
             changedBy,
             note,
           },
@@ -324,15 +331,15 @@ export class OrderService {
     } catch (dbErr) {
       console.error('DB error during status update:', dbErr)
       const oldStatus = currentOrder.status
-      currentOrder.status = newStatus
+      currentOrder.status = targetStatus
       currentOrder.updatedAt = new Date().toISOString()
       currentOrder.statusHistory = currentOrder.statusHistory || []
       currentOrder.statusHistory.push({
         id: `hist-${currentOrder.statusHistory.length + 1}`,
         oldStatus,
-        newStatus,
+        newStatus: targetStatus,
         changedBy,
-        note: note || `Holat yangilandi: ${newStatus}`,
+        note: note || `Holat yangilandi: ${targetStatus}`,
         createdAt: new Date().toISOString(),
       })
       inMemoryOrders.set(orderId, currentOrder)
