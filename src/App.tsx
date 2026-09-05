@@ -25,6 +25,7 @@ import {
   initTelegramWebApp,
   getTelegramUser,
   getTelegramWebApp,
+  getTelegramInitData,
   triggerHaptic,
   getTelegramLaunchData,
   type TelegramUser,

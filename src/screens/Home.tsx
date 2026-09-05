@@ -124,6 +124,7 @@ export default function Home({
   addToCart,
   showToast,
   handleTabChange,
+  user,
   userLocation,
 }: HomeProps) {
   const [activeCategory, setActiveCategory] = useState('all')
