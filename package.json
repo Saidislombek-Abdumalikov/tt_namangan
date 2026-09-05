@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:api": "esbuild backend/src/app.ts --bundle --platform=node --target=node20 --format=cjs --external:@prisma/client --outfile=backend/app.cjs",
+    "build:api": "esbuild backend/src/app.ts --bundle --platform=node --target=node20 --format=cjs --external:@prisma/client --outfile=api/_app.cjs",
     "preview": "vite preview",
     "format": "oxfmt"
   },
