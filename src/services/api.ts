@@ -87,7 +87,7 @@ export const api = {
   /**
    * Authenticate Telegram WebApp with backend.
    */
-    /**
+  /**
    * Fetch real orders for current user by telegramId or phone.
    */
   async getUserOrders(telegramId?: number | string, phone?: string): Promise<Order[]> {
@@ -106,15 +106,15 @@ export const api = {
             items: (o.items || []).map((it: any) => ({
               product: {
                 id: it.productId || it.id,
-                name: it.productName || it.name || 'Taom',
-                price: it.price || 0,
-                image: it.image || 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=400&h=300&fit=crop',
+                name: it.productNameSnapshot || it.productName || it.name || 'Taom',
+                price: it.priceSnapshot || it.price || 0,
+                image: it.product?.image || it.image || 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=400&h=300&fit=crop',
                 category: 'lavash',
                 inStock: true,
               },
               quantity: it.quantity || 1,
-              extras: it.extras || [],
-              totalPrice: (it.price || 0) * (it.quantity || 1),
+              extras: it.selectedExtras || it.extras || [],
+              totalPrice: it.itemTotal || ((it.priceSnapshot || it.price || 0) * (it.quantity || 1)),
             })),
             subtotal: o.subtotal || 0,
             deliveryFee: o.deliveryFee || 10000,
@@ -130,6 +130,46 @@ export const api = {
       console.warn('Failed to fetch user orders from backend:', e)
     }
     return []
+  },
+
+  /**
+   * Fetch single order status and tracking details from backend.
+   */
+  async getOrder(id: string): Promise<Order | null> {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${id}`)
+      if (res.ok) {
+        const o = await res.json()
+        return {
+          id: o.id,
+          number: o.orderNumber || o.number || o.id.slice(0, 6).toUpperCase(),
+          date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('uz-UZ') : 'Hozir',
+          items: (o.items || []).map((it: any) => ({
+            product: {
+              id: it.productId || it.id,
+              name: it.productNameSnapshot || it.productName || it.name || 'Taom',
+              price: it.priceSnapshot || it.price || 0,
+              image: it.product?.image || 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=400&h=300&fit=crop',
+              category: 'lavash',
+              inStock: true,
+            },
+            quantity: it.quantity || 1,
+            extras: it.selectedExtras || it.extras || [],
+            totalPrice: it.itemTotal || ((it.priceSnapshot || it.price || 0) * (it.quantity || 1)),
+          })),
+          subtotal: o.subtotal || 0,
+          deliveryFee: o.deliveryFee || 10000,
+          discount: o.discount || 0,
+          total: o.total || 0,
+          status: (o.status?.toLowerCase() as any) || 'pending',
+          address: o.address,
+          courier: o.courier?.name,
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch order from backend:', e)
+    }
+    return null
   },
 
   async loginWithTelegram(initData: string) {

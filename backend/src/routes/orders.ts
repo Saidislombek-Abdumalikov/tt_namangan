@@ -142,8 +142,14 @@ ordersRouter.get('/', async (req, res): Promise<void> => {
  */
 ordersRouter.get('/:id', async (req, res): Promise<void> => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const idOrNum = req.params.id
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: idOrNum },
+          { orderNumber: idOrNum },
+        ],
+      },
       include: {
         items: true,
         courier: true,

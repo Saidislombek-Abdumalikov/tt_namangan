@@ -1,6 +1,8 @@
-import { ArrowLeft, Phone, MapPin, Package } from 'lucide-react'
-import type { AppProps } from '../types'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Phone, MapPin, Package, Clock, CheckCircle2 } from 'lucide-react'
+import type { AppProps, Order } from '../types'
 import { formatPrice } from '../data'
+import { api } from '../services/api'
 
 interface OrderTrackingProps {
   navigate: AppProps['navigate']
@@ -15,17 +17,56 @@ const TIMELINE = [
   { key: 'delivered', label: 'Yetkazildi', icon: '🎉' },
 ]
 
-const STATUS_ORDER = ['pending', 'preparing', 'on_the_way', 'delivering', 'delivered']
+function getActiveIndex(status?: string): number {
+  if (!status) return 0
+  const s = status.toLowerCase()
+  if (s === 'pending') return 0
+  if (s === 'accepted' || s === 'preparing') return 1
+  if (s === 'courier_assigned' || s === 'picked_up' || s === 'on_the_way') return 2
+  if (s === 'delivering') return 3
+  if (s === 'delivered') return 4
+  return 0
+}
 
 export default function OrderTracking({ navigate, currentOrder }: OrderTrackingProps) {
   if (!currentOrder) return null
 
-  const currentIdx = STATUS_ORDER.indexOf(
-    currentOrder.status === 'on_the_way' ? 'on_the_way' : currentOrder.status
-  )
+  const [order, setOrder] = useState<Order>(currentOrder)
 
-  // Simulate showing as "preparing" for demo
-  const activeIdx = Math.max(1, currentIdx)
+  // Sync state if prop changes
+  useEffect(() => {
+    if (currentOrder) {
+      setOrder(currentOrder)
+    }
+  }, [currentOrder])
+
+  // Live polling every 4 seconds to sync status from Supabase/Backend
+  useEffect(() => {
+    const targetId = order.id || order.number
+    if (!targetId) return
+
+    const pollLatest = async () => {
+      try {
+        const latest = await api.getOrder(targetId)
+        if (latest) {
+          setOrder(prev => ({
+            ...prev,
+            ...latest,
+            // Preserve items if backend snapshot items format differs
+            items: latest.items && latest.items.length > 0 ? latest.items : prev.items,
+          }))
+        }
+      } catch (err) {
+        // Silent catch during polling
+      }
+    }
+
+    const interval = setInterval(pollLatest, 4000)
+    return () => clearInterval(interval)
+  }, [order.id, order.number])
+
+  const activeIdx = getActiveIndex(order.status)
+  const isDelivered = order.status?.toLowerCase() === 'delivered'
 
   return (
     <div className="bg-surface-2 min-h-full">
@@ -38,23 +79,25 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
         </button>
         <div>
           <h1 className="text-txt-1 font-extrabold text-xl">Buyurtma kuzatuvi</h1>
-          <div className="text-txt-2 text-xs">#{currentOrder.number}</div>
+          <div className="text-txt-2 text-xs">#{order.number}</div>
         </div>
       </div>
 
       <div className="px-4 pt-3 pb-4 space-y-3">
         {/* Order number card */}
-        <div className="bg-primary rounded-3xl p-5 text-white">
+        <div className="bg-primary rounded-3xl p-5 text-white shadow-sm">
           <div className="text-white/70 text-xs font-medium mb-1">Buyurtma raqami</div>
-          <div className="font-extrabold text-3xl tracking-widest mb-3">#{currentOrder.number}</div>
+          <div className="font-extrabold text-3xl tracking-widest mb-3">#{order.number}</div>
           <div className="flex items-center justify-between">
             <div>
               <div className="text-white/70 text-xs">Taxminiy vaqt</div>
-              <div className="font-bold text-base">30–45 daqiqa</div>
+              <div className="font-bold text-base">
+                {isDelivered ? 'Yetkazildi ✅' : '30–45 daqiqa'}
+              </div>
             </div>
             <div className="bg-white/20 rounded-2xl px-4 py-2">
               <div className="text-white/70 text-xs">Jami</div>
-              <div className="font-bold">{formatPrice(currentOrder.total)}</div>
+              <div className="font-bold">{formatPrice(order.total)}</div>
             </div>
           </div>
         </div>
@@ -92,32 +135,43 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
           </div>
         </div>
 
-        {/* Courier */}
-        <div className="bg-surface rounded-2xl p-4 border border-bdr">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-txt-1 font-bold text-sm">🚚 Kuryeringiz</h3>
-            <span className="text-success text-xs font-semibold bg-success-light px-2 py-1 rounded-full">
-              Yo'lda
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center">
-              <img
-                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&h=80&fit=crop&auto=format"
-                alt="Courier"
-                className="w-full h-full rounded-full object-cover"
-              />
+        {/* Courier Section */}
+        {order.courier ? (
+          <div className="bg-surface rounded-2xl p-4 border border-bdr">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-txt-1 font-bold text-sm">🚚 Kuryeringiz</h3>
+              <span className="text-success text-xs font-semibold bg-success-light px-2.5 py-1 rounded-full">
+                {order.status === 'delivering' ? 'Yoʻlda' : 'Biriktirilgan'}
+              </span>
             </div>
-            <div className="flex-1">
-              <div className="text-txt-1 font-bold">Aziz</div>
-              <div className="text-txt-2 text-xs">Kuryer</div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center font-bold text-primary text-lg">
+                {order.courier[0] || 'K'}
+              </div>
+              <div className="flex-1">
+                <div className="text-txt-1 font-bold">{order.courier}</div>
+                <div className="text-txt-2 text-xs">Tezkor yetkazuvchi</div>
+              </div>
+              <a
+                href="tel:+998901234567"
+                className="flex items-center gap-1.5 bg-primary-light text-primary font-semibold text-sm px-4 py-2.5 rounded-full hover:opacity-90 active:scale-95 transition-all"
+              >
+                <Phone size={14} />
+                Qo'ng'iroq
+              </a>
             </div>
-            <button className="flex items-center gap-1.5 bg-primary-light text-primary font-semibold text-sm px-4 py-2.5 rounded-full">
-              <Phone size={14} />
-              Qo'ng'iroq
-            </button>
           </div>
-        </div>
+        ) : (
+          <div className="bg-surface rounded-2xl p-4 border border-bdr flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-primary shrink-0">
+              <Clock size={18} />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-txt-1">Taom tayyorlanmoqda</div>
+              <div className="text-[11px] text-txt-2 mt-0.5">Tayyor bo'lishi bilan kuryer biriktiriladi</div>
+            </div>
+          </div>
+        )}
 
         {/* Delivery address */}
         <div className="bg-surface rounded-2xl p-4 border border-bdr">
@@ -126,7 +180,7 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
             <div className="w-8 h-8 bg-primary-light rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
               <MapPin size={16} className="text-primary" />
             </div>
-            <div className="text-txt-1 text-sm font-medium leading-relaxed">{currentOrder.address}</div>
+            <div className="text-txt-1 text-sm font-medium leading-relaxed">{order.address}</div>
           </div>
         </div>
 
@@ -134,7 +188,7 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
         <div className="bg-surface rounded-2xl p-4 border border-bdr">
           <h3 className="text-txt-1 font-bold text-sm mb-3">Buyurtma tarkibi</h3>
           <div className="space-y-2">
-            {currentOrder.items.map((item, i) => (
+            {order.items.map((item, i) => (
               <div key={i} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full" />
@@ -150,3 +204,4 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
     </div>
   )
 }
+

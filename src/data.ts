@@ -582,54 +582,7 @@ export const PRODUCTS: Product[] = [
   },
 ]
 
-export const MOCK_ORDERS: Order[] = [
-  {
-    id: 'ord-101',
-    number: 'A7K29',
-    date: 'Bugun, 14:32',
-    items: [
-      { product: PRODUCTS[0], quantity: 1, extras: [], totalPrice: 120000 },
-      { product: PRODUCTS[12], quantity: 2, extras: [], totalPrice: 66000 },
-    ],
-    subtotal: 186000,
-    deliveryFee: 10000,
-    discount: 5000,
-    total: 191000,
-    status: 'delivered',
-    address: "Namangan sh., Boburshoh ko'chasi 24",
-    courier: 'Aziz Rahimov',
-  },
-  {
-    id: 'ord-102',
-    number: 'B3M71',
-    date: 'Bugun, 13:15',
-    items: [
-      { product: PRODUCTS[4], quantity: 2, extras: ["Pishloq qo'shish"], totalPrice: 230000 },
-    ],
-    subtotal: 230000,
-    deliveryFee: 10000,
-    discount: 5000,
-    total: 235000,
-    status: 'delivered',
-    address: "Namangan sh., Chortoq shoh ko'chasi 11",
-    courier: 'Sardor Qodirov',
-  },
-  {
-    id: 'ord-103',
-    number: 'C9P14',
-    date: 'Bugun, 12:05',
-    items: [
-      { product: PRODUCTS[22], quantity: 2, extras: [], totalPrice: 56000 },
-      { product: PRODUCTS[27], quantity: 2, extras: [], totalPrice: 36000 },
-    ],
-    subtotal: 92000,
-    deliveryFee: 10000,
-    discount: 5000,
-    total: 97000,
-    status: 'preparing',
-    address: "Namangan sh., To'raqo'rg'on ko'chasi 45",
-  },
-]
+export const MOCK_ORDERS: Order[] = []
 
 export const formatPrice = (price: number) =>
   price.toLocaleString('uz-UZ').replace(/\s/g, ' ') + " so'm"
