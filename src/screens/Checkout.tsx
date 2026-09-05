@@ -31,18 +31,25 @@ export default function Checkout({
   userLocation,
   userPhone,
 }: CheckoutProps) {
-  const defaultName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Mijoz'
+  const defaultName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_name') || '' : '')
   const [name, setName] = useState(defaultName)
-  const [phone, setPhone] = useState(userPhone || '+998 90 123 45 67')
-  const [address, setAddress] = useState(userLocation || '')
+  const [phone, setPhone] = useState(userPhone || (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_phone') || '' : ''))
+  const [address, setAddress] = useState(userLocation || (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_address') || '' : ''))
   const [locationShared, setLocationShared] = useState(Boolean(userLocation))
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const savedPromo = typeof window !== 'undefined' ? localStorage.getItem('tt_promo') : null
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
   const deliveryFee = 10000
-  const discount = subtotal > 50000 ? 5000 : 0
-  const total = subtotal + deliveryFee - discount
+  let discount = 0
+  if (savedPromo && ['TT10', 'YANGI', 'NAMANGAN', 'TAOM10', 'CHEGIRMA'].includes(savedPromo.toUpperCase())) {
+    discount = Math.round(subtotal * 0.1)
+  } else if (subtotal > 50000) {
+    discount = 5000
+  }
+  const total = Math.max(0, subtotal + deliveryFee - discount)
 
   const handleShareLocation = () => {
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -50,6 +57,7 @@ export default function Checkout({
         async pos => {
           const lat = pos.coords.latitude
           const lng = pos.coords.longitude
+          setCoords({ lat, lng })
           setLocationShared(true)
           try {
             const res = await fetch(
@@ -72,7 +80,7 @@ export default function Checkout({
           } catch {
             // Network fallback
           }
-          setAddress(`Namangan sh. (${lat.toFixed(4)}, ${lng.toFixed(4)})`)
+          setAddress(`Namangan (${lat.toFixed(5)}, ${lng.toFixed(5)})`)
           showToast('✓ Geolokatsiya aniqlandi')
           triggerHaptic('impact', 'light')
         },
@@ -82,7 +90,7 @@ export default function Checkout({
           showToast('✓ Joylashuv belgilandi')
           triggerHaptic('impact', 'light')
         },
-        { timeout: 7000 }
+        { timeout: 6000 }
       )
     } else {
       setLocationShared(true)
@@ -93,7 +101,17 @@ export default function Checkout({
   }
 
   const handleOrder = async () => {
-    if (!address && !locationShared) {
+    if (!name.trim()) {
+      showToast('⚠️ Ismingizni kiriting')
+      triggerHaptic('notification', 'warning')
+      return
+    }
+    if (!phone.trim()) {
+      showToast('⚠️ Telefon raqamingizni kiriting')
+      triggerHaptic('notification', 'warning')
+      return
+    }
+    if (!address.trim() && !locationShared) {
       showToast('⚠️ Manzilni kiriting yoki joylashuvni ulashing')
       triggerHaptic('notification', 'warning')
       return
@@ -101,7 +119,13 @@ export default function Checkout({
     setLoading(true)
 
     try {
-      // Try backend API creation
+      localStorage.setItem('tt_customer_name', name.trim())
+      localStorage.setItem('tt_customer_phone', phone.trim())
+      if (address) localStorage.setItem('tt_customer_address', address.trim())
+    } catch {}
+
+    try {
+      // Backend API creation
       const apiOrder = await api.createOrder({
         items: cart.map(i => ({
           productId: i.product.id,
@@ -111,10 +135,18 @@ export default function Checkout({
         address: address || "Namangan sh., Boburshoh ko'chasi 24",
         phone,
         customerNote: note,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
         telegramId: user?.id,
         customerName: name,
         userId: user?.id ? String(user.id) : undefined,
+        promoCode: savedPromo || undefined,
+        discount: discount > 0 ? discount : undefined,
       })
+
+      try {
+        localStorage.removeItem('tt_promo')
+      } catch {}
 
       const finalOrder: Order = apiOrder
         ? {

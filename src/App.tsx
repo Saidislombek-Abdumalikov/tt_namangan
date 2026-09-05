@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Screen, CartItem, Order, Product } from './types'
-import { MOCK_ORDERS } from './data'
+import { MOCK_ORDERS, PRODUCTS, CATEGORIES } from './data'
 import { api } from './services/api'
 import BottomNav from './components/BottomNav'
 import Toast from './components/Toast'
@@ -102,11 +102,16 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null)
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
+  const [products, setProducts] = useState<Product[]>(PRODUCTS)
+  const [categories, setCategories] = useState<any[]>(CATEGORIES)
 
   // Initialize Telegram WebApp and Real Account Data
   useEffect(() => {
     initTelegramWebApp()
     const tgUser = getTelegramUser()
+    const data = getTelegramLaunchData()
+    setLaunchData(data)
+
     if (tgUser) {
       setUser(tgUser)
       // Authenticate with backend
@@ -115,14 +120,25 @@ export default function App() {
         api.loginWithTelegram(initData).catch(() => {})
       }
       // Load real orders for this account
-      api.getUserOrders(tgUser.id, launchData.phone).then(realOrders => {
+      api.getUserOrders(tgUser.id, data.phone).then(realOrders => {
         if (realOrders && realOrders.length > 0) {
           setOrders(realOrders)
+          setCurrentOrder(curr => {
+            if (!curr) return null
+            const matched = realOrders.find(o => o.id === curr.id || o.number === curr.number)
+            return matched ? { ...curr, ...matched } : curr
+          })
         }
       })
     }
-    const data = getTelegramLaunchData()
-    setLaunchData(data)
+
+    // Fetch dynamic products and categories from backend
+    api.getCategories().then(cats => {
+      if (cats && cats.length > 0) setCategories(cats)
+    })
+    api.getProducts().then(prods => {
+      if (prods && prods.length > 0) setProducts(prods)
+    })
   }, [])
 
   // Sync cart to localStorage
@@ -282,6 +298,17 @@ export default function App() {
     setOrders(prev => [newOrder, ...prev])
   }, [])
 
+  const handleOrderUpdate = useCallback((updated: Order) => {
+    setCurrentOrder(updated)
+    setOrders(prev => {
+      const exists = prev.some(o => o.id === updated.id || o.number === updated.number)
+      if (exists) {
+        return prev.map(o => (o.id === updated.id || o.number === updated.number ? { ...o, ...updated } : o))
+      }
+      return [updated, ...prev]
+    })
+  }, [])
+
   const cartCount = cart.reduce((a, b) => a + b.quantity, 0)
   const showNav = TABS_WITH_NAV.includes(screen)
 
@@ -310,6 +337,8 @@ export default function App() {
               handleTabChange={handleTabChange}
               user={user}
               userLocation={launchData.address}
+              products={products}
+              categories={categories}
             />
           )}
           {screen === 'catalog' && (
@@ -320,6 +349,8 @@ export default function App() {
               setSelectedProduct={setSelectedProduct}
               addToCart={addToCart}
               showToast={showToast}
+              products={products}
+              categories={categories}
             />
           )}
           {screen === 'search' && (
@@ -327,6 +358,7 @@ export default function App() {
               navigate={navigate}
               setSelectedProduct={setSelectedProduct}
               addToCart={addToCart}
+              products={products}
             />
           )}
           {screen === 'cart' && (
@@ -360,7 +392,11 @@ export default function App() {
             />
           )}
           {screen === 'order-tracking' && (
-            <OrderTracking navigate={navigate} currentOrder={currentOrder} />
+            <OrderTracking
+              navigate={navigate}
+              currentOrder={currentOrder}
+              onOrderUpdate={handleOrderUpdate}
+            />
           )}
           {screen === 'profile' && (
             <ProfileScreen

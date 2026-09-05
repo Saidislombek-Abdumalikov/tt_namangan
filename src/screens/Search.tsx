@@ -10,6 +10,7 @@ interface SearchProps {
   navigate: AppProps['navigate']
   setSelectedProduct: AppProps['setSelectedProduct']
   addToCart: AppProps['addToCart']
+  products?: Product[]
 }
 
 function ResultCard({ product, onTap, onAdd }: { product: Product; onTap: () => void; onAdd: () => void }) {
@@ -38,11 +39,12 @@ function ResultCard({ product, onTap, onAdd }: { product: Product; onTap: () => 
   )
 }
 
-export default function SearchScreen({ navigate, setSelectedProduct, addToCart }: SearchProps) {
+export default function SearchScreen({ navigate, setSelectedProduct, addToCart, products }: SearchProps) {
   const [query, setQuery] = useState('')
+  const allProducts = products && products.length > 0 ? products : PRODUCTS
 
   const results = query.length > 1
-    ? PRODUCTS.filter(p =>
+    ? allProducts.filter(p =>
         p.name.toLowerCase().includes(query.toLowerCase()) ||
         p.description.toLowerCase().includes(query.toLowerCase())
       )

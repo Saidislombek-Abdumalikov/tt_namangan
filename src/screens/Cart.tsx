@@ -1,6 +1,8 @@
-import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Minus, Plus, Trash2, ShoppingBag, Tag, Check, X } from 'lucide-react'
 import type { AppProps } from '../types'
 import { PRODUCTS, formatPrice } from '../data'
+import { triggerHaptic } from '../services/telegram'
 
 interface CartProps {
   navigate: AppProps['navigate']
@@ -14,11 +16,66 @@ interface CartProps {
 
 const UPSELL = PRODUCTS.find(p => p.id === 'ichim-1') || PRODUCTS[0]
 
+const VALID_PROMOS: Record<string, number> = {
+  TT10: 0.1,
+  YANGI: 0.1,
+  NAMANGAN: 0.1,
+  TAOM10: 0.1,
+  CHEGIRMA: 0.1,
+}
+
 export default function Cart({ navigate, cart, removeFromCart, updateQuantity, addToCart, showToast, handleTabChange }: CartProps) {
+  const [promoCode, setPromoCode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tt_promo') || ''
+    }
+    return ''
+  })
+  const [promoInput, setPromoInput] = useState('')
+  const [promoApplied, setPromoApplied] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = localStorage.getItem('tt_promo')
+      return Boolean(p && VALID_PROMOS[p.toUpperCase()])
+    }
+    return false
+  })
+
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
   const deliveryFee = subtotal > 0 ? 10000 : 0
-  const discount = subtotal > 50000 ? 5000 : 0
-  const total = subtotal + deliveryFee - discount
+  
+  // Discount: either from valid promo (10%) or standard order threshold (5,000 UZS if > 50,000 UZS)
+  let discount = 0
+  if (promoApplied && promoCode && VALID_PROMOS[promoCode.toUpperCase()]) {
+    discount = Math.round(subtotal * VALID_PROMOS[promoCode.toUpperCase()])
+  } else if (subtotal > 50000) {
+    discount = 5000
+  }
+
+  const total = Math.max(0, subtotal + deliveryFee - discount)
+
+  const handleApplyPromo = () => {
+    const code = promoInput.trim().toUpperCase()
+    if (!code) return
+    if (VALID_PROMOS[code]) {
+      setPromoCode(code)
+      setPromoApplied(true)
+      localStorage.setItem('tt_promo', code)
+      showToast(`✓ "${code}" promokodi qo'llandi! -10% chegirma`)
+      triggerHaptic('notification', 'success')
+      setPromoInput('')
+    } else {
+      showToast('❌ Noto\'g\'ri promokod. Masalan: TT10, YANGI')
+      triggerHaptic('notification', 'error')
+    }
+  }
+
+  const handleRemovePromo = () => {
+    setPromoCode('')
+    setPromoApplied(false)
+    localStorage.removeItem('tt_promo')
+    showToast('Promokod olib tashlandi')
+    triggerHaptic('impact', 'light')
+  }
 
   const hasUpsell = !cart.find(i => i.product.id === UPSELL.id)
 
@@ -111,6 +168,52 @@ export default function Cart({ navigate, cart, removeFromCart, updateQuantity, a
             </div>
           </div>
         )}
+
+        {/* Promo Code Section */}
+        <div className="bg-surface rounded-2xl p-4 border border-bdr mt-2">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Tag size={16} className="text-primary" />
+            <span className="text-txt-1 font-bold text-sm">Promokod</span>
+          </div>
+          {promoApplied ? (
+            <div className="flex items-center justify-between bg-primary-light/40 border border-primary/30 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white">
+                  <Check size={12} strokeWidth={3} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-sm text-txt-1 tracking-wider">{promoCode}</span>
+                  <span className="text-primary text-xs font-semibold ml-2">-10% chegirma</span>
+                </div>
+              </div>
+              <button
+                onClick={handleRemovePromo}
+                className="w-7 h-7 rounded-full bg-surface hover:bg-surface-3 flex items-center justify-center text-txt-3 transition-colors"
+                title="O'chirish"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Promokodni kiriting (masalan: TT10)"
+                value={promoInput}
+                onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && handleApplyPromo()}
+                className="flex-1 bg-surface-2 border border-bdr rounded-xl px-3.5 py-2.5 text-sm font-semibold text-txt-1 placeholder:text-txt-3 placeholder:font-normal outline-none focus:border-primary uppercase tracking-wider transition-colors"
+              />
+              <button
+                onClick={handleApplyPromo}
+                disabled={!promoInput.trim()}
+                className="bg-primary text-white font-bold text-xs px-4 py-2.5 rounded-xl active:bg-primary-press disabled:opacity-50 transition-all shadow-xs"
+              >
+                Qo'llash
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Summary */}
         <div className="bg-surface rounded-2xl p-4 border border-bdr mt-2">

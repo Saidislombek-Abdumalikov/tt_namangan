@@ -97,38 +97,25 @@ export function getPhysicalKeyboard(userData: BotUserData) {
     .row()
     .text('📦 Buyurtmalarim')
     .text('☎️ Bog\'lanish')
-
-  if (!userData.phone) {
-    kb.row().requestContact('📱 Telefon raqamni yuborish')
-  }
-  if (!userData.address && !userData.lat) {
-    kb.row().requestLocation('📍 Joylashuvni yuborish')
-  }
+    .row()
+    .text('📍 Manzilni yangilash')
+    .text('📱 Raqamni yangilash')
 
   return kb.resized().persistent()
 }
 
-function getPhoneKeyboard(userData?: BotUserData) {
-  const url = buildWebAppUrl(userData)
+function getPhoneOnlyKeyboard() {
   return new Keyboard()
-    .webApp('🍽 Menyuni ochish (Mini App)', url)
-    .row()
     .requestContact('📱 Telefon raqamni yuborish')
-    .row()
-    .text('⬅️ Bekor qilish')
     .resized()
     .persistent()
 }
 
-function getLocationKeyboard(userData?: BotUserData) {
-  const url = buildWebAppUrl(userData)
+function getLocationOnlyKeyboard() {
   return new Keyboard()
-    .webApp('🍽 Menyuni ochish (Mini App)', url)
-    .row()
     .requestLocation('📍 Joylashuvni yuborish')
     .row()
     .text('➡️ Keyinroq kiritish')
-    .text('⬅️ Bekor qilish')
     .resized()
     .persistent()
 }
@@ -143,7 +130,7 @@ function getInlineMenuKeyboard(userData: BotUserData) {
     .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
 }
 
-// 1. /start command
+// 1. /start command — Sequential Onboarding Flow: Phone -> Location -> Main Menu
 bot.command('start', async ctx => {
   const user = ctx.from
   if (!user) return
@@ -159,6 +146,48 @@ bot.command('start', async ctx => {
   userData.firstName = user.first_name
   userData.lastName = user.last_name || userData.lastName
   userData.username = user.username || userData.username
+
+  // Check if phone is in DB
+  if (!userData.phone) {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { telegramId: BigInt(user.id) },
+      })
+      if (dbUser?.phone) {
+        userData.phone = dbUser.phone
+      }
+    } catch {}
+  }
+
+  // STEP 1: If phone is missing, ask for phone first
+  if (!userData.phone) {
+    userData.step = 'awaiting_phone'
+    saveBotUser(userData)
+
+    const askPhoneText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> rasmiy yetkazib berish xizmati botiga xush kelibsiz!\n\nBuyurtma berishni boshlash uchun, iltimos, pastdagi <b>«📱 Telefon raqamni yuborish»</b> tugmasini bosing:`
+    await ctx.reply(askPhoneText, {
+      parse_mode: 'HTML',
+      reply_markup: getPhoneOnlyKeyboard(),
+    })
+    return
+  }
+
+  // STEP 2: If phone exists but location is missing, ask for location
+  if (!userData.address && !userData.lat) {
+    userData.step = 'awaiting_location'
+    saveBotUser(userData)
+
+    const askLocText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\nTelefon raqamingiz: <b>${userData.phone}</b> ✅\n\nTaomlarni tezkor yetkazib berishimiz uchun, iltimos, pastdagi <b>«📍 Joylashuvni yuborish»</b> tugmasini bosing:`
+    await ctx.reply(askLocText, {
+      parse_mode: 'HTML',
+      reply_markup: getLocationOnlyKeyboard(),
+    })
+    return
+  }
+
+  // STEP 3: Both phone and location ready -> Full access
+  userData.step = 'registered'
+  saveBotUser(userData)
 
   // Sync to database if available
   try {
@@ -198,9 +227,7 @@ bot.command('start', async ctx => {
     // Ignore if not supported
   }
 
-  saveBotUser(userData)
-
-  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> rasmiy yetkazib berish xizmati botiga xush kelibsiz!\n\nBizda sara tandir lavashlar, mangal hot-doglar, TT burgerlar, kombo to'plamlar va milliy taomlarni to'g'ridan-to'g'ri Telegram ilovasi orqali tezkor buyurtma qilishingiz mumkin.\n\n👇 <b>Pastdagi «🍽 Menyuni ochish (Mini App)» tugmasini bosing:</b>`
+  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> rasmiy yetkazib berish botiga xush kelibsiz!\n\n📍 Manzil: <b>${userData.address || 'Namangan shahri'}</b>\n📱 Telefon: <b>${userData.phone}</b>\n\n👇 <b>Pastdagi «🍽 Menyuni ochish (Mini App)» tugmasini bosing:</b>`
 
   await ctx.reply(welcomeText, {
     parse_mode: 'HTML',
@@ -240,11 +267,11 @@ bot.on('message:contact', async ctx => {
     // Ignore
   }
 
-  const text = `✅ Telefon raqamingiz qabul qilindi: <b>${phone}</b>\n\nEndi esa taomlarni qayerga yetkazib berishimiz kerak?\nIltimos, pastdagi tugma orqali joylashuvingizni (geolokatsiyani) yuboring yoki manzilni yozma xabar qilib yuboring:`
+  const text = `✅ Telefon raqamingiz qabul qilindi: <b>${phone}</b>\n\nEndi esa taomlarni qayerga yetkazib berishimiz kerak?\nIltimos, pastdagi <b>«📍 Joylashuvni yuborish»</b> tugmasini bosing yoki manzilni yozma xabar qilib yuboring:`
 
   await ctx.reply(text, {
     parse_mode: 'HTML',
-    reply_markup: getLocationKeyboard(),
+    reply_markup: getLocationOnlyKeyboard(),
   })
 })
 
@@ -305,27 +332,25 @@ bot.on('message:location', async ctx => {
   userData.step = 'registered'
   saveBotUser(userData)
 
-  const successText = `🎉 <b>Yetkazib berish manzilingiz belgilandi!</b>\n\n📍 Manzil: <b>${userData.address}</b>\n📱 Telefon: <b>${userData.phone || "Qayd etilgan"}</b>\n\nMenyuni ochish va buyurtma berish uchun quyidagi <b>🍽 Buyurtma berish</b> tugmasini bosing:`
+  const successText = `🎉 <b>Rahmat! Ro'yxatdan o'tish muvaffaqiyatli yakunlandi.</b>\n\n📍 Manzilingiz: <b>${userData.address}</b>\n📱 Telefon: <b>${userData.phone || 'Qayd etilgan'}</b>\n\nEndi pastdagi <b>«🍽 Menyuni ochish (Mini App)»</b> tugmasini bosib, taomlarga tezkor buyurtma berishingiz mumkin:`
 
   await ctx.reply(successText, {
     parse_mode: 'HTML',
-    reply_markup: getMainMenuKeyboard(userData),
+    reply_markup: getPhysicalKeyboard(userData),
   })
 
   const appUrl = buildWebAppUrl(userData)
-  if (appUrl.startsWith('https://')) {
-    try {
-      await ctx.api.setChatMenuButton({
-        chat_id: user.id,
-        menu_button: {
-          type: 'web_app',
-          text: '🍽 Buyurtma berish',
-          web_app: { url: appUrl },
-        },
-      })
-    } catch (e) {
-      // Ignore
-    }
+  try {
+    await ctx.api.setChatMenuButton({
+      chat_id: user.id,
+      menu_button: {
+        type: 'web_app',
+        text: '🍽 Menyuni ochish',
+        web_app: { url: appUrl },
+      },
+    })
+  } catch (e) {
+    // Ignore
   }
 })
 

@@ -26,12 +26,21 @@ export function formatOrderMessage(order: any): string {
   const courierText = order.courier ? `\n🚚 <b>Kuryer:</b> ${escapeHtml(order.courier.name)} (${escapeHtml(order.courier.phone)})` : ''
   const customerName = escapeHtml(`${order.user?.firstName || 'Mijoz'} ${order.user?.lastName || ''}`.trim())
 
+  const mapsText = (order.latitude && order.longitude)
+    ? `\n🗺 <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>`
+    : ''
+
+  const createdTime = new Date(order.createdAt || Date.now()).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+  const updatedTime = order.updatedAt ? new Date(order.updatedAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : createdTime
+  const timingText = `\n⏱ <b>Kutilayotgan yetkazish:</b> 25–35 daqiqa\n🕐 <b>Qabul qilingan:</b> ${createdTime}` + (order.status !== 'PENDING' ? ` | <b>Yangilangan:</b> ${updatedTime}` : '')
+
   return `━━━━━━━━━━━━━━━━━━━━━━
 🆕 <b>YANGI BUYURTMA #${escapeHtml(order.orderNumber)}</b>
 ━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>Mijoz:</b> ${customerName}
 📞 <b>Telefon:</b> ${escapeHtml(order.phone)}
-📍 <b>Manzil:</b> ${escapeHtml(order.address)}${noteText}${courierText}
+📍 <b>Manzil:</b> ${escapeHtml(order.address)}${mapsText}${noteText}${courierText}
+${timingText}
 
 🍽 <b>Buyurtma tarkibi:</b>
 ${itemsText}
@@ -43,7 +52,6 @@ ${itemsText}
 💵 <b>JAMI: ${(order.total || 0).toLocaleString('uz-UZ')} so'm</b>
 
 📦 <b>Holat:</b> ${getStatusBadge(order.status)}
-🕐 <b>Vaqt:</b> ${new Date(order.createdAt || Date.now()).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
 ━━━━━━━━━━━━━━━━━━━━━━`
 }
 
@@ -177,6 +185,15 @@ export class TelegramNotifier {
         } catch {
           order.telegramMessageId = sentMsg.message_id
         }
+
+        // Send exact Telegram location pin for couriers if coordinates are available
+        if (order.latitude && order.longitude) {
+          try {
+            await bot.api.sendLocation(sentMsg.chat.id, Number(order.latitude), Number(order.longitude))
+          } catch (locErr) {
+            console.warn('Could not send native location pin to group:', locErr)
+          }
+        }
       } else if (lastErr) {
         console.warn(`⚠️ Buyurtmani Telegram guruhiga yuborib bo'lmadi (${config.ordersChatId}). Sabab: ${lastErr?.message || lastErr}. Iltimos, @tt_namangan_bot ni ushbu guruhga a'zo yoki admin qilib qo'shing.`)
       }
@@ -215,6 +232,10 @@ export class TelegramNotifier {
 
     let text = ''
     switch (status) {
+      case 'CREATED':
+      case 'PENDING':
+        text = `🎉 <b>Buyurtmangiz muvaffaqiyatli qabul qilindi!</b>\n\nBuyurtma raqamingiz: <code>#${orderNumber}</code>\nTez orada oshxonamiz taomlarni tayyorlashga kirishadi.\n\nHolat o'zgarganda ushbu bot orqali sizga avtomatik xabar beriladi.`
+        break
       case 'ACCEPTED':
         text = `✅ <b>Buyurtmangiz qabul qilindi!</b>\n\nBuyurtma raqamingiz: <code>#${orderNumber}</code>\nOshpazlarimiz tez orada uni tayyorlashga kirishadi.`
         break

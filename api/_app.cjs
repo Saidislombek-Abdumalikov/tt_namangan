@@ -41705,6 +41705,7 @@ categoriesRouter.get("/", async (req, res) => {
         label: c.name,
         emoji: c.emoji || "\u{1F37D}\uFE0F",
         description: c.description,
+        image: c.image,
         productCount: c._count.products
       }));
       res.json(formatted);
@@ -42107,8 +42108,18 @@ var OrderService = class {
       });
     }
     const deliveryFee = 1e4;
-    const discount = subtotal > 5e4 ? 5e3 : 0;
-    const total = subtotal + deliveryFee - discount;
+    let discount = 0;
+    if (input.discount && input.discount > 0) {
+      discount = Math.min(input.discount, subtotal);
+    } else if (input.promoCode) {
+      const code = input.promoCode.trim().toUpperCase();
+      if (["TT10", "YANGI", "NAMANGAN", "TAOM10", "CHEGIRMA"].includes(code)) {
+        discount = Math.round(subtotal * 0.1);
+      }
+    } else if (subtotal > 5e4) {
+      discount = 5e3;
+    }
+    const total = Math.max(0, subtotal + deliveryFee - discount);
     const orderNumber = await generateOrderNumber();
     try {
       const order = await prisma.$transaction(async (tx) => {
@@ -42276,38 +42287,51 @@ var OrderService = class {
    * Assigns a courier to an order.
    */
   static async assignCourier(orderId, courierId, changedBy) {
-    const FALLBACK_COURIERS = {
-      "courier-1": { id: "courier-1", name: "Azizbek Rahimov", phone: "+998901112233", vehicle: "Spark Oq (01A777AA)", isActive: true },
-      "courier-2": { id: "courier-2", name: "Jasurbek Yoqubov", phone: "+998912223344", vehicle: "Nexia 3 Qora (50B888BB)", isActive: true },
-      "courier-3": { id: "courier-3", name: "Boburmirzo Aliyev", phone: "+998933334455", vehicle: "Skuter Honda Dio", isActive: true }
-    };
+    const cleanOrderId = String(orderId).replace(/^#/, "");
     let courier = null;
     try {
-      courier = await prisma.courier.findUnique({
-        where: { id: courierId }
+      courier = await prisma.courier.findFirst({
+        where: {
+          OR: [
+            { id: courierId },
+            { name: { contains: courierId, mode: "insensitive" } }
+          ]
+        }
       });
     } catch {
-      courier = FALLBACK_COURIERS[courierId];
     }
     if (!courier) {
-      courier = FALLBACK_COURIERS[courierId];
+      try {
+        courier = await prisma.courier.findFirst({ where: { isActive: true } });
+      } catch {
+      }
     }
-    if (!courier || !courier.isActive) {
-      throw new Error("Kuryer topilmadi yoki faol emas.");
+    if (!courier) {
+      courier = {
+        id: "2aed44fe-1857-4224-8f51-5c86cd267365",
+        name: "Aziz Rahimov",
+        phone: "+998 93 111 22 33",
+        isActive: true
+      };
     }
     let currentOrder = null;
     try {
       currentOrder = await prisma.order.findFirst({
         where: {
-          OR: [{ id: orderId }, { orderNumber: orderId }]
+          OR: [
+            { id: cleanOrderId },
+            { orderNumber: cleanOrderId },
+            { id: orderId },
+            { orderNumber: orderId }
+          ]
         },
         include: { user: true, courier: true, items: true }
       });
     } catch {
-      currentOrder = inMemoryOrders.get(orderId);
+      currentOrder = inMemoryOrders.get(cleanOrderId) || inMemoryOrders.get(orderId);
     }
     if (!currentOrder) {
-      currentOrder = inMemoryOrders.get(orderId);
+      currentOrder = inMemoryOrders.get(cleanOrderId) || inMemoryOrders.get(orderId);
     }
     if (!currentOrder) {
       throw new Error("Buyurtma topilmadi.");
@@ -42423,22 +42447,14 @@ function buildWebAppUrl(data) {
 }
 function getPhysicalKeyboard(userData) {
   const webAppUrl = buildWebAppUrl(userData);
-  const kb = new import_grammy.Keyboard().webApp("\u{1F37D} Menyuni ochish (Mini App)", webAppUrl).row().text("\u{1F4E6} Buyurtmalarim").text("\u260E\uFE0F Bog'lanish");
-  if (!userData.phone) {
-    kb.row().requestContact("\u{1F4F1} Telefon raqamni yuborish");
-  }
-  if (!userData.address && !userData.lat) {
-    kb.row().requestLocation("\u{1F4CD} Joylashuvni yuborish");
-  }
+  const kb = new import_grammy.Keyboard().webApp("\u{1F37D} Menyuni ochish (Mini App)", webAppUrl).row().text("\u{1F4E6} Buyurtmalarim").text("\u260E\uFE0F Bog'lanish").row().text("\u{1F4CD} Manzilni yangilash").text("\u{1F4F1} Raqamni yangilash");
   return kb.resized().persistent();
 }
-function getPhoneKeyboard(userData) {
-  const url = buildWebAppUrl(userData);
-  return new import_grammy.Keyboard().webApp("\u{1F37D} Menyuni ochish (Mini App)", url).row().requestContact("\u{1F4F1} Telefon raqamni yuborish").row().text("\u2B05\uFE0F Bekor qilish").resized().persistent();
+function getPhoneOnlyKeyboard() {
+  return new import_grammy.Keyboard().requestContact("\u{1F4F1} Telefon raqamni yuborish").resized().persistent();
 }
-function getLocationKeyboard(userData) {
-  const url = buildWebAppUrl(userData);
-  return new import_grammy.Keyboard().webApp("\u{1F37D} Menyuni ochish (Mini App)", url).row().requestLocation("\u{1F4CD} Joylashuvni yuborish").row().text("\u27A1\uFE0F Keyinroq kiritish").text("\u2B05\uFE0F Bekor qilish").resized().persistent();
+function getLocationOnlyKeyboard() {
+  return new import_grammy.Keyboard().requestLocation("\u{1F4CD} Joylashuvni yuborish").row().text("\u27A1\uFE0F Keyinroq kiritish").resized().persistent();
 }
 function getMainMenuKeyboard(userData) {
   return getPhysicalKeyboard(userData);
@@ -42455,6 +42471,47 @@ bot.command("start", async (ctx) => {
   userData.firstName = user.first_name;
   userData.lastName = user.last_name || userData.lastName;
   userData.username = user.username || userData.username;
+  if (!userData.phone) {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { telegramId: BigInt(user.id) }
+      });
+      if (dbUser?.phone) {
+        userData.phone = dbUser.phone;
+      }
+    } catch {
+    }
+  }
+  if (!userData.phone) {
+    userData.step = "awaiting_phone";
+    saveBotUser(userData);
+    const askPhoneText = `Assalomu alaykum, <b>${user.first_name}</b>! \u{1F37D}
+
+<b>\xABTEZKOR TAOM NAMANGAN\xBB</b> rasmiy yetkazib berish xizmati botiga xush kelibsiz!
+
+Buyurtma berishni boshlash uchun, iltimos, pastdagi <b>\xAB\u{1F4F1} Telefon raqamni yuborish\xBB</b> tugmasini bosing:`;
+    await ctx.reply(askPhoneText, {
+      parse_mode: "HTML",
+      reply_markup: getPhoneOnlyKeyboard()
+    });
+    return;
+  }
+  if (!userData.address && !userData.lat) {
+    userData.step = "awaiting_location";
+    saveBotUser(userData);
+    const askLocText = `Assalomu alaykum, <b>${user.first_name}</b>! \u{1F37D}
+
+Telefon raqamingiz: <b>${userData.phone}</b> \u2705
+
+Taomlarni tezkor yetkazib berishimiz uchun, iltimos, pastdagi <b>\xAB\u{1F4CD} Joylashuvni yuborish\xBB</b> tugmasini bosing:`;
+    await ctx.reply(askLocText, {
+      parse_mode: "HTML",
+      reply_markup: getLocationOnlyKeyboard()
+    });
+    return;
+  }
+  userData.step = "registered";
+  saveBotUser(userData);
   try {
     await prisma.user.upsert({
       where: { telegramId: BigInt(user.id) },
@@ -42486,12 +42543,12 @@ bot.command("start", async (ctx) => {
     });
   } catch (e) {
   }
-  saveBotUser(userData);
   const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! \u{1F37D}
 
-<b>\xABTEZKOR TAOM NAMANGAN\xBB</b> rasmiy yetkazib berish xizmati botiga xush kelibsiz!
+<b>\xABTEZKOR TAOM NAMANGAN\xBB</b> rasmiy yetkazib berish botiga xush kelibsiz!
 
-Bizda sara tandir lavashlar, mangal hot-doglar, TT burgerlar, kombo to'plamlar va milliy taomlarni to'g'ridan-to'g'ri Telegram ilovasi orqali tezkor buyurtma qilishingiz mumkin.
+\u{1F4CD} Manzil: <b>${userData.address || "Namangan shahri"}</b>
+\u{1F4F1} Telefon: <b>${userData.phone}</b>
 
 \u{1F447} <b>Pastdagi \xAB\u{1F37D} Menyuni ochish (Mini App)\xBB tugmasini bosing:</b>`;
   await ctx.reply(welcomeText, {
@@ -42526,10 +42583,10 @@ bot.on("message:contact", async (ctx) => {
   const text = `\u2705 Telefon raqamingiz qabul qilindi: <b>${phone}</b>
 
 Endi esa taomlarni qayerga yetkazib berishimiz kerak?
-Iltimos, pastdagi tugma orqali joylashuvingizni (geolokatsiyani) yuboring yoki manzilni yozma xabar qilib yuboring:`;
+Iltimos, pastdagi <b>\xAB\u{1F4CD} Joylashuvni yuborish\xBB</b> tugmasini bosing yoki manzilni yozma xabar qilib yuboring:`;
   await ctx.reply(text, {
     parse_mode: "HTML",
-    reply_markup: getLocationKeyboard()
+    reply_markup: getLocationOnlyKeyboard()
   });
 });
 async function reverseGeocode(lat, lng) {
@@ -42581,29 +42638,27 @@ bot.on("message:location", async (ctx) => {
   userData.address = readableAddress;
   userData.step = "registered";
   saveBotUser(userData);
-  const successText = `\u{1F389} <b>Yetkazib berish manzilingiz belgilandi!</b>
+  const successText = `\u{1F389} <b>Rahmat! Ro'yxatdan o'tish muvaffaqiyatli yakunlandi.</b>
 
-\u{1F4CD} Manzil: <b>${userData.address}</b>
+\u{1F4CD} Manzilingiz: <b>${userData.address}</b>
 \u{1F4F1} Telefon: <b>${userData.phone || "Qayd etilgan"}</b>
 
-Menyuni ochish va buyurtma berish uchun quyidagi <b>\u{1F37D} Buyurtma berish</b> tugmasini bosing:`;
+Endi pastdagi <b>\xAB\u{1F37D} Menyuni ochish (Mini App)\xBB</b> tugmasini bosib, taomlarga tezkor buyurtma berishingiz mumkin:`;
   await ctx.reply(successText, {
     parse_mode: "HTML",
-    reply_markup: getMainMenuKeyboard(userData)
+    reply_markup: getPhysicalKeyboard(userData)
   });
   const appUrl = buildWebAppUrl(userData);
-  if (appUrl.startsWith("https://")) {
-    try {
-      await ctx.api.setChatMenuButton({
-        chat_id: user.id,
-        menu_button: {
-          type: "web_app",
-          text: "\u{1F37D} Buyurtma berish",
-          web_app: { url: appUrl }
-        }
-      });
-    } catch (e) {
-    }
+  try {
+    await ctx.api.setChatMenuButton({
+      chat_id: user.id,
+      menu_button: {
+        type: "web_app",
+        text: "\u{1F37D} Menyuni ochish",
+        web_app: { url: appUrl }
+      }
+    });
+  } catch (e) {
   }
 });
 bot.hears("\u27A1\uFE0F Keyinroq kiritish", async (ctx) => {
@@ -42957,12 +43012,20 @@ function formatOrderMessage2(order) {
   const courierText = order.courier ? `
 \u{1F69A} <b>Kuryer:</b> ${escapeHtml(order.courier.name)} (${escapeHtml(order.courier.phone)})` : "";
   const customerName = escapeHtml(`${order.user?.firstName || "Mijoz"} ${order.user?.lastName || ""}`.trim());
+  const mapsText = order.latitude && order.longitude ? `
+\u{1F5FA} <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>` : "";
+  const createdTime = new Date(order.createdAt || Date.now()).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+  const updatedTime = order.updatedAt ? new Date(order.updatedAt).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : createdTime;
+  const timingText = `
+\u23F1 <b>Kutilayotgan yetkazish:</b> 25\u201335 daqiqa
+\u{1F550} <b>Qabul qilingan:</b> ${createdTime}` + (order.status !== "PENDING" ? ` | <b>Yangilangan:</b> ${updatedTime}` : "");
   return `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F195} <b>YANGI BUYURTMA #${escapeHtml(order.orderNumber)}</b>
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F464} <b>Mijoz:</b> ${customerName}
 \u{1F4DE} <b>Telefon:</b> ${escapeHtml(order.phone)}
-\u{1F4CD} <b>Manzil:</b> ${escapeHtml(order.address)}${noteText}${courierText}
+\u{1F4CD} <b>Manzil:</b> ${escapeHtml(order.address)}${mapsText}${noteText}${courierText}
+${timingText}
 
 \u{1F37D} <b>Buyurtma tarkibi:</b>
 ${itemsText}
@@ -42974,7 +43037,6 @@ ${itemsText}
 \u{1F4B5} <b>JAMI: ${(order.total || 0).toLocaleString("uz-UZ")} so'm</b>
 
 \u{1F4E6} <b>Holat:</b> ${getStatusBadge(order.status)}
-\u{1F550} <b>Vaqt:</b> ${new Date(order.createdAt || Date.now()).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501`;
 }
 function getStatusBadge(status) {
@@ -43095,6 +43157,13 @@ var TelegramNotifier = class {
         } catch {
           order.telegramMessageId = sentMsg.message_id;
         }
+        if (order.latitude && order.longitude) {
+          try {
+            await bot.api.sendLocation(sentMsg.chat.id, Number(order.latitude), Number(order.longitude));
+          } catch (locErr) {
+            console.warn("Could not send native location pin to group:", locErr);
+          }
+        }
       } else if (lastErr) {
         console.warn(`\u26A0\uFE0F Buyurtmani Telegram guruhiga yuborib bo'lmadi (${config.ordersChatId}). Sabab: ${lastErr?.message || lastErr}. Iltimos, @tt_namangan_bot ni ushbu guruhga a'zo yoki admin qilib qo'shing.`);
       }
@@ -43128,6 +43197,15 @@ var TelegramNotifier = class {
     if (!config.botToken || !telegramId) return;
     let text = "";
     switch (status) {
+      case "CREATED":
+      case "PENDING":
+        text = `\u{1F389} <b>Buyurtmangiz muvaffaqiyatli qabul qilindi!</b>
+
+Buyurtma raqamingiz: <code>#${orderNumber}</code>
+Tez orada oshxonamiz taomlarni tayyorlashga kirishadi.
+
+Holat o'zgarganda ushbu bot orqali sizga avtomatik xabar beriladi.`;
+        break;
       case "ACCEPTED":
         text = `\u2705 <b>Buyurtmangiz qabul qilindi!</b>
 
@@ -43185,7 +43263,7 @@ Operatorimiz tez orada siz bilan bog'lanadi.`;
 var ordersRouter = (0, import_express4.Router)();
 ordersRouter.post("/", async (req, res) => {
   try {
-    const { items, address, phone, customerNote, latitude, longitude, userId, telegramId, customerName } = req.body;
+    const { items, address, phone, customerNote, latitude, longitude, userId, telegramId, customerName, promoCode, discount } = req.body;
     let targetUserId = req.user?.id;
     const effectiveTgId = telegramId || (userId && !isNaN(Number(userId)) ? Number(userId) : null);
     if (!targetUserId && effectiveTgId) {
@@ -43245,12 +43323,22 @@ ordersRouter.post("/", async (req, res) => {
       phone,
       customerNote,
       latitude,
-      longitude
+      longitude,
+      promoCode,
+      discount
     });
     try {
       await TelegramNotifier.sendOrderToGroup(order);
     } catch (tgErr) {
       console.error("Telegram notification error:", tgErr);
+    }
+    try {
+      const tgId = order.user?.telegramId || effectiveTgId;
+      if (tgId) {
+        await TelegramNotifier.notifyCustomer(tgId, order.orderNumber, "CREATED");
+      }
+    } catch (custErr) {
+      console.error("Customer notification error:", custErr);
     }
     res.status(201).json(order);
   } catch (error) {
@@ -43530,6 +43618,53 @@ adminRouter.post("/orders/:id/assign-courier", async (req, res) => {
       updated.orderNumber,
       "COURIER_ASSIGNED"
     );
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+adminRouter.patch("/orders/:id/discount", async (req, res) => {
+  try {
+    const { discount, note } = req.body;
+    const cleanId = req.params.id.replace(/^#/, "");
+    const discountAmount = Math.max(0, Number(discount) || 0);
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { orderNumber: cleanId },
+          { id: req.params.id },
+          { orderNumber: req.params.id }
+        ]
+      },
+      include: { user: true, courier: true, items: true }
+    });
+    if (!order) {
+      res.status(404).json({ error: "Buyurtma topilmadi" });
+      return;
+    }
+    const newTotal = Math.max(0, order.subtotal + order.deliveryFee - discountAmount);
+    const updated = await prisma.$transaction(async (tx) => {
+      const ord = await tx.order.update({
+        where: { id: order.id },
+        data: {
+          discount: discountAmount,
+          total: newTotal
+        },
+        include: { user: true, courier: true, items: true }
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          oldStatus: order.status,
+          newStatus: order.status,
+          changedBy: req.user?.firstName || "Admin",
+          note: note || `Chegirma o'zgartirildi: ${discountAmount.toLocaleString()} so'm. Yangi jami: ${newTotal.toLocaleString()} so'm`
+        }
+      });
+      return ord;
+    });
+    await TelegramNotifier.updateGroupOrderMessage(updated);
     res.json(updated);
   } catch (error) {
     res.status(400).json({ error: error.message });

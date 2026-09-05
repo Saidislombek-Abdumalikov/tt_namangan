@@ -75,5 +75,7 @@ export interface AppProps {
   addOrder?: (order: Order) => void
   userLocation?: string
   userPhone?: string
+  products?: Product[]
+  categories?: any[]
 }
 

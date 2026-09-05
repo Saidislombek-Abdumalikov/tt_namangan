@@ -252,6 +252,66 @@ adminRouter.post('/orders/:id/assign-courier', async (req, res): Promise<void> =
 })
 
 /**
+ * PATCH /api/admin/orders/:id/discount
+ * Updates order discount and recalculates total.
+ */
+adminRouter.patch('/orders/:id/discount', async (req, res): Promise<void> => {
+  try {
+    const { discount, note } = req.body
+    const cleanId = req.params.id.replace(/^#/, '')
+    const discountAmount = Math.max(0, Number(discount) || 0)
+
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { orderNumber: cleanId },
+          { id: req.params.id },
+          { orderNumber: req.params.id },
+        ],
+      },
+      include: { user: true, courier: true, items: true },
+    })
+
+    if (!order) {
+      res.status(404).json({ error: 'Buyurtma topilmadi' })
+      return
+    }
+
+    const newTotal = Math.max(0, order.subtotal + order.deliveryFee - discountAmount)
+
+    const updated = await prisma.$transaction(async tx => {
+      const ord = await tx.order.update({
+        where: { id: order.id },
+        data: {
+          discount: discountAmount,
+          total: newTotal,
+        },
+        include: { user: true, courier: true, items: true },
+      })
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          oldStatus: order.status,
+          newStatus: order.status,
+          changedBy: req.user?.firstName || 'Admin',
+          note: note || `Chegirma o'zgartirildi: ${discountAmount.toLocaleString()} so'm. Yangi jami: ${newTotal.toLocaleString()} so'm`,
+        },
+      })
+
+      return ord
+    })
+
+    await TelegramNotifier.updateGroupOrderMessage(updated)
+
+    res.json(updated)
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+})
+
+/**
  * Products CRUD
  */
 adminRouter.get('/products', async (req, res): Promise<void> => {

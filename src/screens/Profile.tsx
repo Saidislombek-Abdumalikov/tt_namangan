@@ -421,7 +421,6 @@ const MENU_ITEMS = [
   { icon: '📜', label: 'Mening buyurtmalarim', screen: 'order-history' as const },
   { icon: '❤️', label: 'Sevimlilar', screen: 'favorites' as const },
   { icon: '📍', label: 'Manzillar', screen: 'addresses' as const },
-  { icon: '🔔', label: 'Bildirishnomalar', screen: 'notifications' as const },
   { icon: '❓', label: 'Yordam', screen: 'help' as const },
 ]
 

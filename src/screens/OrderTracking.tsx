@@ -7,6 +7,7 @@ import { api } from '../services/api'
 interface OrderTrackingProps {
   navigate: AppProps['navigate']
   currentOrder: AppProps['currentOrder']
+  onOrderUpdate?: (order: Order) => void
 }
 
 const TIMELINE = [
@@ -28,7 +29,7 @@ function getActiveIndex(status?: string): number {
   return 0
 }
 
-export default function OrderTracking({ navigate, currentOrder }: OrderTrackingProps) {
+export default function OrderTracking({ navigate, currentOrder, onOrderUpdate }: OrderTrackingProps) {
   if (!currentOrder) return null
 
   const [order, setOrder] = useState<Order>(currentOrder)
@@ -49,12 +50,15 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
       try {
         const latest = await api.getOrder(targetId)
         if (latest) {
-          setOrder(prev => ({
-            ...prev,
-            ...latest,
-            // Preserve items if backend snapshot items format differs
-            items: latest.items && latest.items.length > 0 ? latest.items : prev.items,
-          }))
+          setOrder(prev => {
+            const merged: Order = {
+              ...prev,
+              ...latest,
+              items: latest.items && latest.items.length > 0 ? latest.items : prev.items,
+            }
+            onOrderUpdate?.(merged)
+            return merged
+          })
         }
       } catch (err) {
         // Silent catch during polling
@@ -63,7 +67,7 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
 
     const interval = setInterval(pollLatest, 4000)
     return () => clearInterval(interval)
-  }, [order.id, order.number])
+  }, [order.id, order.number, onOrderUpdate])
 
   const activeIdx = getActiveIndex(order.status)
   const isDelivered = order.status?.toLowerCase() === 'delivered'
@@ -72,8 +76,9 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
     <div className="bg-surface-2 min-h-full">
       <div className="bg-surface px-5 pt-12 pb-4 flex items-center gap-4">
         <button
-          onClick={() => navigate('order-success')}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-2"
+          onClick={() => navigate('home')}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-2 active:bg-surface-3 transition-colors"
+          title="Bosh sahifaga qaytish"
         >
           <ArrowLeft size={20} className="text-txt-1" />
         </button>
@@ -92,7 +97,7 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
             <div>
               <div className="text-white/70 text-xs">Taxminiy vaqt</div>
               <div className="font-bold text-base">
-                {isDelivered ? 'Yetkazildi ✅' : '30–45 daqiqa'}
+                {isDelivered ? 'Yetkazildi ✅' : '25–35 daqiqa'}
               </div>
             </div>
             <div className="bg-white/20 rounded-2xl px-4 py-2">

@@ -13,7 +13,7 @@ export const ordersRouter = Router()
  */
 ordersRouter.post('/', async (req, res): Promise<void> => {
   try {
-    const { items, address, phone, customerNote, latitude, longitude, userId, telegramId, customerName } = req.body
+    const { items, address, phone, customerNote, latitude, longitude, userId, telegramId, customerName, promoCode, discount } = req.body
 
     let targetUserId = req.user?.id
     const effectiveTgId = telegramId || (userId && !isNaN(Number(userId)) ? Number(userId) : null)
@@ -78,6 +78,8 @@ ordersRouter.post('/', async (req, res): Promise<void> => {
       customerNote,
       latitude,
       longitude,
+      promoCode,
+      discount,
     })
 
     // Send to restaurant Telegram group
@@ -85,6 +87,16 @@ ordersRouter.post('/', async (req, res): Promise<void> => {
       await TelegramNotifier.sendOrderToGroup(order)
     } catch (tgErr) {
       console.error('Telegram notification error:', tgErr)
+    }
+
+    // Notify customer via Telegram bot
+    try {
+      const tgId = order.user?.telegramId || effectiveTgId
+      if (tgId) {
+        await TelegramNotifier.notifyCustomer(tgId, order.orderNumber, 'CREATED')
+      }
+    } catch (custErr) {
+      console.error('Customer notification error:', custErr)
     }
 
     res.status(201).json(order)

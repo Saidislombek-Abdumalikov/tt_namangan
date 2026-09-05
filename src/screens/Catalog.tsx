@@ -10,6 +10,8 @@ interface CatalogProps {
   setSelectedProduct: AppProps['setSelectedProduct']
   addToCart: AppProps['addToCart']
   showToast: AppProps['showToast']
+  products?: Product[]
+  categories?: any[]
 }
 
 const CATEGORY_META: Record<string, { image: string; desc: string }> = {
@@ -115,16 +117,30 @@ export default function Catalog({
   setSelectedProduct,
   addToCart,
   showToast,
+  products,
+  categories,
 }: CatalogProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const foodCategories = CATEGORIES.filter(c => c.id !== 'all')
+  const allCategories = categories && categories.length > 0 ? categories : CATEGORIES
+  const allProducts = products && products.length > 0 ? products : PRODUCTS
+
+  const foodCategories = allCategories
+    .filter((c: any) => c.id !== 'all' && c.slug !== 'all')
+    .map((c: any) => ({
+      id: c.slug || c.id,
+      label: c.label || c.name,
+      emoji: c.emoji || '🍽️',
+      image: c.image,
+      description: c.description,
+    }))
+
   const currentCategory = foodCategories.find(c => c.id === selectedCategoryId)
 
-  const inStockProducts = PRODUCTS.filter(p => p.inStock)
+  const inStockProducts = allProducts.filter(p => p.inStock)
   const categoryProducts = selectedCategoryId
-    ? inStockProducts.filter(p => p.category === selectedCategoryId)
+    ? inStockProducts.filter(p => p.category === selectedCategoryId || (p as any).categoryId === selectedCategoryId)
     : []
 
   const displayedMeals = searchQuery.trim()
@@ -160,10 +176,10 @@ export default function Catalog({
         <div className="px-4 pt-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             {foodCategories.map(cat => {
-              const count = inStockProducts.filter(p => p.category === cat.id).length
+              const count = inStockProducts.filter(p => p.category === cat.id || (p as any).categoryId === cat.id).length
               const meta = CATEGORY_META[cat.id]
-              const coverImage = meta?.image || 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=400&h=300&fit=crop&auto=format'
-              const desc = meta?.desc || `${count} xil sara taom`
+              const coverImage = cat.image || meta?.image || 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=400&h=300&fit=crop&auto=format'
+              const desc = cat.description || meta?.desc || `${count} xil sara taom`
 
               return (
                 <div

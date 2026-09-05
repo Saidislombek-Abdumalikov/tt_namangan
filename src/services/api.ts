@@ -63,6 +63,8 @@ export const api = {
     userId?: string
     telegramId?: number | string
     customerName?: string
+    promoCode?: string
+    discount?: number
   }): Promise<Order | null> {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('tt_token') : null

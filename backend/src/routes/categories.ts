@@ -38,6 +38,7 @@ categoriesRouter.get('/', async (req, res): Promise<void> => {
         label: c.name,
         emoji: c.emoji || '🍽️',
         description: c.description,
+        image: c.image,
         productCount: c._count.products,
       }))
       res.json(formatted)

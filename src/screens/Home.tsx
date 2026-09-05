@@ -21,6 +21,8 @@ interface HomeProps {
   handleTabChange: AppProps['handleTabChange']
   user?: AppProps['user']
   userLocation?: string
+  products?: Product[]
+  categories?: any[]
 }
 
 function ProductCard({ product, isFav, onFav, onTap, onAdd }: {
@@ -126,40 +128,36 @@ export default function Home({
   handleTabChange,
   user,
   userLocation,
+  products,
+  categories,
 }: HomeProps) {
   const [activeCategory, setActiveCategory] = useState('all')
 
-  const inStockProducts = PRODUCTS.filter(p => p.inStock)
+  const allProducts = (products && products.length > 0) ? products : PRODUCTS
+  const allCategories = (categories && categories.length > 0) ? categories : CATEGORIES
+
+  const inStockProducts = allProducts.filter(p => p.inStock)
   const popular = inStockProducts.slice(0, 5)
   const discounted = inStockProducts.filter(p => p.discount)
-  const foodCategories = CATEGORIES.filter(c => c.id !== 'all')
+  const foodCategories = allCategories.filter(c => (c.id !== 'all' && c.slug !== 'all'))
 
   return (
     <div className="bg-surface-2 min-h-full pb-6">
-      {/* Header - Brand & Location (No Salom greeting) */}
+      {/* Header - Brand & Location (Cleaned - No logo box, no bell icon) */}
       <div className="bg-surface px-5 pt-12 pb-4 border-b border-bdr/60">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 rounded-2xl overflow-hidden border border-bdr shadow-xs bg-white flex items-center justify-center shrink-0">
-              <img src="/logo.jpg" alt="Tezkor Taom" className="w-full h-full object-contain p-0.5" />
+          <div>
+            <div className="text-txt-3 text-[11px] font-semibold flex items-center gap-1.5">
+              <MapPin size={13} className="text-primary" />
+              Yetkazib berish manzili
             </div>
-            <div>
-              <div className="text-txt-3 text-[11px] font-semibold flex items-center gap-1">
-                <MapPin size={12} className="text-primary" />
-                Yetkazib berish manzili
-              </div>
-              <div className="text-txt-1 font-bold text-sm tracking-tight truncate max-w-[200px]">
-                {userLocation || 'Namangan shahri'}
-              </div>
+            <div className="text-txt-1 font-bold text-sm tracking-tight truncate max-w-[260px] mt-0.5">
+              {userLocation || 'Namangan shahri'}
             </div>
           </div>
-          <button
-            onClick={() => navigate('notifications')}
-            className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center relative active:scale-95 transition-transform"
-          >
-            <Bell size={20} className="text-txt-1" />
-            <div className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full" />
-          </button>
+          <div className="text-primary font-extrabold text-xs tracking-wider bg-primary/10 px-3 py-1.5 rounded-full">
+            TEZKOR TAOM
+          </div>
         </div>
 
         <div className="mt-3">
@@ -261,20 +259,24 @@ export default function Home({
           <span className="text-txt-3 text-xs font-semibold">{inStockProducts.length} xil taom</span>
         </div>
         <div className="flex gap-2 px-4 overflow-x-auto pb-0.5">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-semibold transition-all ${
-                activeCategory === cat.id
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-surface-2 text-txt-2 border border-bdr active:bg-surface-3'
-              }`}
-            >
-              <span>{cat.emoji}</span>
-              <span>{cat.label}</span>
-            </button>
-          ))}
+          {allCategories.map(cat => {
+            const catKey = cat.id || cat.slug
+            const isCatActive = activeCategory === catKey
+            return (
+              <button
+                key={catKey}
+                onClick={() => setActiveCategory(catKey)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-semibold transition-all ${
+                  isCatActive
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-surface-2 text-txt-2 border border-bdr active:bg-surface-3'
+                }`}
+              >
+                <span>{cat.emoji || '🍽️'}</span>
+                <span>{cat.label || cat.name}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -283,15 +285,17 @@ export default function Home({
         {activeCategory === 'all' ? (
           // HAMMASI: All meals in stock organized neatly by category order!
           foodCategories.map(cat => {
-            const catProducts = inStockProducts.filter(p => p.category === cat.id)
+            const catKey = cat.id || cat.slug
+            const catLabel = cat.label || cat.name
+            const catProducts = inStockProducts.filter(p => p.category === catKey || p.category === catLabel || p.category === cat.name)
             if (catProducts.length === 0) return null
 
             return (
-              <div key={cat.id} className="space-y-3">
+              <div key={catKey} className="space-y-3">
                 <div className="flex items-center justify-between border-b border-bdr/60 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{cat.emoji}</span>
-                    <h3 className="text-txt-1 font-extrabold text-base">{cat.label}</h3>
+                    <span className="text-xl">{cat.emoji || '🍽️'}</span>
+                    <h3 className="text-txt-1 font-extrabold text-base">{catLabel}</h3>
                   </div>
                   <span className="text-txt-3 text-xs font-medium">{catProducts.length} ta taom</span>
                 </div>
@@ -322,15 +326,16 @@ export default function Home({
         ) : (
           // Single Selected Category: Show meals belonging to this category in order
           (() => {
-            const currentCat = CATEGORIES.find(c => c.id === activeCategory)
-            const catProducts = inStockProducts.filter(p => p.category === activeCategory)
+            const currentCat = allCategories.find(c => (c.id === activeCategory || c.slug === activeCategory))
+            const catLabel = currentCat?.label || currentCat?.name
+            const catProducts = inStockProducts.filter(p => p.category === activeCategory || p.category === catLabel || p.category === currentCat?.name)
 
             return (
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-bdr/60 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{currentCat?.emoji}</span>
-                    <h3 className="text-txt-1 font-extrabold text-lg">{currentCat?.label}</h3>
+                    <span className="text-xl">{currentCat?.emoji || '🍽️'}</span>
+                    <h3 className="text-txt-1 font-extrabold text-lg">{catLabel}</h3>
                   </div>
                   <span className="text-txt-3 text-xs font-semibold">{catProducts.length} ta taom mavjud</span>
                 </div>
