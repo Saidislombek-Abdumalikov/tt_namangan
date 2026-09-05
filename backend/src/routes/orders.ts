@@ -13,22 +13,59 @@ export const ordersRouter = Router()
  */
 ordersRouter.post('/', async (req, res): Promise<void> => {
   try {
-    const { items, address, phone, customerNote, latitude, longitude, userId } = req.body
+    const { items, address, phone, customerNote, latitude, longitude, userId, telegramId, customerName } = req.body
 
-    let targetUserId = req.user?.id || userId
+    let targetUserId = req.user?.id
+    const effectiveTgId = telegramId || (userId && !isNaN(Number(userId)) ? Number(userId) : null)
+
+    if (!targetUserId && effectiveTgId) {
+      try {
+        const upserted = await prisma.user.upsert({
+          where: { telegramId: BigInt(effectiveTgId) },
+          update: {
+            firstName: customerName || undefined,
+            phone: phone || undefined,
+          },
+          create: {
+            telegramId: BigInt(effectiveTgId),
+            firstName: customerName || 'Mijoz',
+            phone: phone || '+998 90 123 45 67',
+            role: 'CUSTOMER',
+          },
+        })
+        targetUserId = upserted.id
+      } catch (err) {
+        console.error('Failed to upsert user by telegramId:', err)
+      }
+    }
+
+    if (!targetUserId && userId) {
+      try {
+        const existing = await prisma.user.findUnique({ where: { id: userId } })
+        if (existing) {
+          targetUserId = existing.id
+        }
+      } catch {}
+    }
+
     if (!targetUserId) {
       try {
         const defaultUser = await prisma.user.upsert({
           where: { telegramId: BigInt(99890123) },
-          update: {},
+          update: {
+            firstName: customerName || 'Mijoz',
+            phone: phone || '+998 90 123 45 67',
+          },
           create: {
             telegramId: BigInt(99890123),
-            firstName: 'Saidislom',
+            firstName: customerName || 'Mijoz',
             phone: phone || '+998 90 123 45 67',
+            role: 'CUSTOMER',
           },
         })
         targetUserId = defaultUser.id
-      } catch {
+      } catch (err) {
+        console.error('Failed to upsert fallback user:', err)
         targetUserId = 'usr-guest-001'
       }
     }
@@ -43,11 +80,11 @@ ordersRouter.post('/', async (req, res): Promise<void> => {
       longitude,
     })
 
-    // Send to restaurant Telegram group if configured
+    // Send to restaurant Telegram group
     try {
       await TelegramNotifier.sendOrderToGroup(order)
-    } catch {
-      // Ignored if telegram token not active
+    } catch (tgErr) {
+      console.error('Telegram notification error:', tgErr)
     }
 
     res.status(201).json(order)

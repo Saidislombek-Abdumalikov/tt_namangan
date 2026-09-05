@@ -101,6 +101,10 @@ adminRouter.get('/stats', async (req, res): Promise<void> => {
       },
     })
 
+    const todayOrders = await prisma.order.count({
+      where: { createdAt: { gte: startOfToday } },
+    })
+
     const totalProducts = await prisma.product.count()
     const totalCustomers = await prisma.user.count({ where: { role: 'CUSTOMER' } })
     const activeCouriers = await prisma.courier.count({ where: { isActive: true } })
@@ -109,6 +113,7 @@ adminRouter.get('/stats', async (req, res): Promise<void> => {
       totalRevenue: totalRevenueAgg._sum.total || 0,
       todayRevenue: todayRevenueAgg._sum.total || 0,
       totalOrders,
+      todayOrders,
       pendingOrders,
       preparingOrders,
       deliveringOrders,
@@ -164,8 +169,14 @@ adminRouter.get('/orders', async (req, res): Promise<void> => {
  */
 adminRouter.get('/orders/:id', async (req, res): Promise<void> => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const idOrNum = req.params.id
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: idOrNum },
+          { orderNumber: idOrNum },
+        ],
+      },
       include: {
         user: true,
         courier: true,

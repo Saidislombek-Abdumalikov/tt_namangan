@@ -61,18 +61,48 @@ export class OrderService {
     }> = []
 
     for (const itemInput of input.items) {
-      let product: any = null
+      let dbProduct: any = null
       try {
-        product = await prisma.product.findUnique({
+        dbProduct = await prisma.product.findUnique({
           where: { id: itemInput.productId },
           include: { options: true },
         })
-      } catch {
-        product = FALLBACK_PRODUCTS.find(p => p.id === itemInput.productId)
+      } catch {}
+
+      const fallback = FALLBACK_PRODUCTS.find(p => p.id === itemInput.productId)
+
+      if (!dbProduct && fallback) {
+        try {
+          dbProduct = await prisma.product.findFirst({
+            where: {
+              OR: [
+                { name: { equals: fallback.name, mode: 'insensitive' } },
+                { name: { contains: fallback.name, mode: 'insensitive' } },
+              ],
+            },
+            include: { options: true },
+          })
+        } catch {}
       }
-      if (!product) {
-        product = FALLBACK_PRODUCTS.find(p => p.id === itemInput.productId)
+
+      if (!dbProduct) {
+        try {
+          dbProduct = await prisma.product.findFirst({
+            where: {
+              name: { contains: itemInput.productId, mode: 'insensitive' },
+            },
+            include: { options: true },
+          })
+        } catch {}
       }
+
+      if (!dbProduct) {
+        try {
+          dbProduct = await prisma.product.findFirst({ include: { options: true } })
+        } catch {}
+      }
+
+      const product = dbProduct || fallback
 
       if (!product) {
         throw new Error(`Mahsulot topilmadi: ${itemInput.productId}`)
@@ -101,7 +131,7 @@ export class OrderService {
       subtotal += itemTotal
 
       processedItems.push({
-        productId: product.id,
+        productId: dbProduct ? dbProduct.id : product.id,
         productNameSnapshot: product.name,
         priceSnapshot: unitPrice,
         quantity: itemInput.quantity,
@@ -226,9 +256,11 @@ export class OrderService {
   ) {
     let currentOrder: any = null
     try {
-      currentOrder = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: { user: true, courier: true },
+      currentOrder = await prisma.order.findFirst({
+        where: {
+          OR: [{ id: orderId }, { orderNumber: orderId }],
+        },
+        include: { user: true, courier: true, items: true },
       })
     } catch {
       currentOrder = inMemoryOrders.get(orderId)
@@ -250,14 +282,14 @@ export class OrderService {
     try {
       const updated = await prisma.$transaction(async tx => {
         const ord = await tx.order.update({
-          where: { id: orderId },
+          where: { id: currentOrder.id },
           data: { status: newStatus },
-          include: { user: true, courier: true },
+          include: { user: true, courier: true, items: true },
         })
 
         await tx.orderStatusHistory.create({
           data: {
-            orderId,
+            orderId: currentOrder.id,
             oldStatus: currentOrder.status,
             newStatus,
             changedBy,
@@ -271,7 +303,8 @@ export class OrderService {
       inMemoryOrders.set(updated.id, updated)
       inMemoryOrders.set(updated.orderNumber, updated)
       return updated
-    } catch {
+    } catch (dbErr) {
+      console.error('DB error during status update:', dbErr)
       const oldStatus = currentOrder.status
       currentOrder.status = newStatus
       currentOrder.updatedAt = new Date().toISOString()
@@ -316,10 +349,29 @@ export class OrderService {
       throw new Error('Kuryer topilmadi yoki faol emas.')
     }
 
+    let currentOrder: any = null
+    try {
+      currentOrder = await prisma.order.findFirst({
+        where: {
+          OR: [{ id: orderId }, { orderNumber: orderId }],
+        },
+        include: { user: true, courier: true, items: true },
+      })
+    } catch {
+      currentOrder = inMemoryOrders.get(orderId)
+    }
+    if (!currentOrder) {
+      currentOrder = inMemoryOrders.get(orderId)
+    }
+
+    if (!currentOrder) {
+      throw new Error('Buyurtma topilmadi.')
+    }
+
     try {
       const updated = await prisma.$transaction(async tx => {
         const ord = await tx.order.update({
-          where: { id: orderId },
+          where: { id: currentOrder.id },
           data: {
             courierId,
             status: 'COURIER_ASSIGNED',
@@ -329,7 +381,7 @@ export class OrderService {
 
         await tx.orderStatusHistory.create({
           data: {
-            orderId,
+            orderId: currentOrder.id,
             oldStatus: ord.status,
             newStatus: 'COURIER_ASSIGNED',
             changedBy,

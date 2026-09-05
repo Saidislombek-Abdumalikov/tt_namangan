@@ -4,7 +4,7 @@ import path from 'path'
 import { config } from '../config'
 import { prisma } from '../database'
 import { OrderService } from '../services/orderService'
-import { TelegramNotifier, getOrderKeyboard, formatOrderMessage } from '../services/telegramNotifier'
+import { TelegramNotifier, getOrderKeyboard, formatOrderMessage, setResolvedChatId } from '../services/telegramNotifier'
 import { OrderStatus } from '@prisma/client'
 
 // Instantiate bot with token
@@ -670,4 +670,17 @@ bot.on('callback_query:data', async ctx => {
       await ctx.answerCallbackQuery({ text: err.message, show_alert: true })
     }
   }
+})
+
+// 11. Channel and Group Membership & Post Listener
+bot.on('my_chat_member', ctx => {
+  const chat = ctx.myChatMember.chat
+  console.log(`🤖 Bot added to chat/channel: [${(chat as any).title || ''}] id=${chat.id} type=${chat.type}`)
+  setResolvedChatId(String(chat.id))
+})
+
+bot.on('channel_post', ctx => {
+  const chat = ctx.channelPost.chat
+  console.log(`📢 Channel post in: [${(chat as any).title || ''}] id=${chat.id}`)
+  setResolvedChatId(String(chat.id))
 })

@@ -3,38 +3,47 @@ import { config } from '../config'
 import { bot } from '../bot/bot'
 import { prisma } from '../database'
 
+function escapeHtml(text: any): string {
+  if (!text) return ''
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 export function formatOrderMessage(order: any): string {
-  const itemsText = order.items
+  const itemsText = (order.items || [])
     .map((item: any) => {
       const extras =
         item.selectedExtras && item.selectedExtras.length > 0
-          ? ` (+ ${item.selectedExtras.join(', ')})`
+          ? ` (+ ${item.selectedExtras.map(escapeHtml).join(', ')})`
           : ''
-      return `• <b>${item.productNameSnapshot}</b> × ${item.quantity}${extras} — ${(item.itemTotal).toLocaleString('uz-UZ')} so'm`
+      return `• <b>${escapeHtml(item.productNameSnapshot || 'Taom')}</b> × ${item.quantity}${extras} — ${(item.itemTotal || 0).toLocaleString('uz-UZ')} so'm`
     })
     .join('\n')
 
-  const noteText = order.customerNote ? `\n📝 <b>Izoh:</b> ${order.customerNote}` : ''
-  const courierText = order.courier ? `\n🚚 <b>Kuryer:</b> ${order.courier.name} (${order.courier.phone})` : ''
+  const noteText = order.customerNote ? `\n📝 <b>Izoh:</b> ${escapeHtml(order.customerNote)}` : ''
+  const courierText = order.courier ? `\n🚚 <b>Kuryer:</b> ${escapeHtml(order.courier.name)} (${escapeHtml(order.courier.phone)})` : ''
+  const customerName = escapeHtml(`${order.user?.firstName || 'Mijoz'} ${order.user?.lastName || ''}`.trim())
 
   return `━━━━━━━━━━━━━━━━━━━━━━
-🆕 <b>YANGI BUYURTMA #${order.orderNumber}</b>
+🆕 <b>YANGI BUYURTMA #${escapeHtml(order.orderNumber)}</b>
 ━━━━━━━━━━━━━━━━━━━━━━
-👤 <b>Mijoz:</b> ${order.user?.firstName || 'Mijoz'} ${order.user?.lastName || ''}
-📞 <b>Telefon:</b> ${order.phone}
-📍 <b>Manzil:</b> ${order.address}${noteText}${courierText}
+👤 <b>Mijoz:</b> ${customerName}
+📞 <b>Telefon:</b> ${escapeHtml(order.phone)}
+📍 <b>Manzil:</b> ${escapeHtml(order.address)}${noteText}${courierText}
 
 🍽 <b>Buyurtma tarkibi:</b>
 ${itemsText}
 
 ──────────────────────
-💰 <b>Mahsulotlar:</b> ${order.subtotal.toLocaleString('uz-UZ')} so'm
-🚗 <b>Yetkazib berish:</b> ${order.deliveryFee.toLocaleString('uz-UZ')} so'm
-🎉 <b>Chegirma:</b> ${order.discount.toLocaleString('uz-UZ')} so'm
-💵 <b>JAMI: ${order.total.toLocaleString('uz-UZ')} so'm</b>
+💰 <b>Mahsulotlar:</b> ${(order.subtotal || 0).toLocaleString('uz-UZ')} so'm
+🚗 <b>Yetkazib berish:</b> ${(order.deliveryFee || 0).toLocaleString('uz-UZ')} so'm
+🎉 <b>Chegirma:</b> ${(order.discount || 0).toLocaleString('uz-UZ')} so'm
+💵 <b>JAMI: ${(order.total || 0).toLocaleString('uz-UZ')} so'm</b>
 
 📦 <b>Holat:</b> ${getStatusBadge(order.status)}
-🕐 <b>Vaqt:</b> ${new Date(order.createdAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
+🕐 <b>Vaqt:</b> ${new Date(order.createdAt || Date.now()).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
 ━━━━━━━━━━━━━━━━━━━━━━`
 }
 
@@ -93,7 +102,11 @@ export function getOrderKeyboard(orderId: string, status: string): InlineKeyboar
   return kb
 }
 
-let resolvedChatId: string | null = null
+export let resolvedChatId: string | null = '-1003901925817'
+
+export function setResolvedChatId(id: string) {
+  resolvedChatId = id
+}
 
 export class TelegramNotifier {
   /**
@@ -136,6 +149,21 @@ export class TelegramNotifier {
           }
         } catch (e: any) {
           lastErr = e
+          if (e.parameters?.migrate_to_chat_id) {
+            const newId = String(e.parameters.migrate_to_chat_id)
+            try {
+              sentMsg = await bot.api.sendMessage(newId, text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard,
+              })
+              if (sentMsg) {
+                resolvedChatId = newId
+                break
+              }
+            } catch (err2) {
+              lastErr = err2
+            }
+          }
         }
       }
 

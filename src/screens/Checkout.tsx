@@ -111,6 +111,9 @@ export default function Checkout({
         address: address || "Namangan sh., Boburshoh ko'chasi 24",
         phone,
         customerNote: note,
+        telegramId: user?.id,
+        customerName: name,
+        userId: user?.id ? String(user.id) : undefined,
       })
 
       const finalOrder: Order = apiOrder

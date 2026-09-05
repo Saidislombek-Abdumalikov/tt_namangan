@@ -56,8 +56,20 @@ if (!isVercel) {
   // Start Telegram Bot polling locally
   if (config.botToken && config.botToken !== '123456:dummy_token_for_local_development') {
     bot.start({
-      onStart: botInfo => {
+      onStart: async botInfo => {
         console.log(`🤖 Telegram Bot started as @${botInfo.username}`)
+        try {
+          await bot.api.setChatMenuButton({
+            menu_button: {
+              type: 'web_app',
+              text: '🍽 Menyu',
+              web_app: { url: config.webAppUrl || 'https://tt-namangan.vercel.app' },
+            },
+          })
+          console.log(`✅ Telegram global menu button set to: ${config.webAppUrl || 'https://tt-namangan.vercel.app'}`)
+        } catch (e) {
+          console.warn('Could not set global menu button:', e)
+        }
       },
     })
   } else {

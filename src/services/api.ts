@@ -61,6 +61,8 @@ export const api = {
     latitude?: number
     longitude?: number
     userId?: string
+    telegramId?: number | string
+    customerName?: string
   }): Promise<Order | null> {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('tt_token') : null
