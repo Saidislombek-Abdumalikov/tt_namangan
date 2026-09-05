@@ -61,10 +61,31 @@ ordersRouter.post('/', async (req, res): Promise<void> => {
  * GET /api/orders
  * Retrieves orders for the authenticated user.
  */
-ordersRouter.get('/', requireAuth, async (req, res): Promise<void> => {
+ordersRouter.get('/', async (req, res): Promise<void> => {
   try {
+    const telegramId = req.query.telegramId ? String(req.query.telegramId) : null
+    const phone = req.query.phone ? String(req.query.phone) : null
+    const userId = (req as any).user?.id || (req.query.userId ? String(req.query.userId) : null)
+
+    const where: any = {}
+    if (userId) {
+      where.userId = userId
+    } else if (telegramId) {
+      const dbUser = await prisma.user.findFirst({
+        where: { telegramId: BigInt(telegramId) },
+      })
+      if (dbUser) {
+        where.userId = dbUser.id
+      } else {
+        res.json([])
+        return
+      }
+    } else if (phone) {
+      where.phone = phone
+    }
+
     const orders = await prisma.order.findMany({
-      where: { userId: req.user!.id },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         items: true,
@@ -73,11 +94,8 @@ ordersRouter.get('/', requireAuth, async (req, res): Promise<void> => {
     })
 
     res.json(orders)
-  } catch {
-    const fallbackOrders = Array.from(inMemoryOrders.values()).filter(
-      (o: any) => o.userId === req.user!.id || o.userId === 'usr-guest-001'
-    )
-    res.json(fallbackOrders)
+  } catch (err) {
+    res.json([])
   }
 })
 

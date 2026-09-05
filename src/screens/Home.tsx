@@ -161,7 +161,12 @@ export default function Home({
           </button>
         </div>
 
-        <p className="text-txt-1 font-extrabold text-2xl mt-3 tracking-tight">Bugun nima tanlaysiz?</p>
+        <div className="mt-3">
+          <div className="text-txt-3 text-xs font-medium">
+            {user?.first_name ? `Xush kelibsiz, ${user.first_name} 👋` : 'Xush kelibsiz! 👋'}
+          </div>
+          <h1 className="text-txt-1 font-extrabold text-2xl tracking-tight">Bugun nima tanlaysiz?</h1>
+        </div>
 
         {/* Search bar */}
         <button

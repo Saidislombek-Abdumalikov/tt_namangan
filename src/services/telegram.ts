@@ -86,8 +86,103 @@ export const initTelegramWebApp = () => {
 }
 
 export const getTelegramUser = (): TelegramUser | null => {
+  let user: TelegramUser | null = null
+
+  // 1. Direct Telegram WebApp object
   const tg = getTelegramWebApp()
-  return tg?.initDataUnsafe?.user || null
+  if (tg?.initDataUnsafe?.user?.first_name) {
+    const u = tg.initDataUnsafe.user
+    user = {
+      id: u.id,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      username: u.username,
+      language_code: u.language_code,
+      photo_url: u.photo_url,
+    }
+  }
+
+  // 2. Parse initData query string if initDataUnsafe wasn't populated yet
+  if (!user && tg?.initData) {
+    try {
+      const searchParams = new URLSearchParams(tg.initData)
+      const userJson = searchParams.get('user')
+      if (userJson) {
+        const u = JSON.parse(userJson)
+        if (u.first_name) {
+          user = {
+            id: u.id,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            username: u.username,
+            language_code: u.language_code,
+            photo_url: u.photo_url,
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Telegram Web (hash parameters #tgWebAppData=...)
+  if (!user && typeof window !== 'undefined' && window.location.hash) {
+    try {
+      const hash = window.location.hash.substring(1)
+      const hashParams = new URLSearchParams(hash)
+      const tgWebAppData = hashParams.get('tgWebAppData') || hash
+      const dataParams = new URLSearchParams(tgWebAppData)
+      const userJson = dataParams.get('user')
+      if (userJson) {
+        const u = JSON.parse(userJson)
+        if (u.first_name) {
+          user = {
+            id: u.id,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            username: u.username,
+            language_code: u.language_code,
+            photo_url: u.photo_url,
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 4. URL query parameters passed by Telegram Bot (?tg_id=...&first_name=...&username=...)
+  if (!user && typeof window !== 'undefined' && window.location.search) {
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const firstName = urlParams.get('first_name') || urlParams.get('name')
+      if (firstName) {
+        const tgId = urlParams.get('tg_id') || urlParams.get('id')
+        user = {
+          id: tgId ? Number(tgId) : 1001,
+          first_name: decodeURIComponent(firstName),
+          last_name: urlParams.get('last_name') ? decodeURIComponent(urlParams.get('last_name')!) : undefined,
+          username: urlParams.get('username') ? decodeURIComponent(urlParams.get('username')!) : undefined,
+          photo_url: urlParams.get('photo_url') || undefined,
+        }
+      }
+    } catch {}
+  }
+
+  // 5. Persisted user in localStorage
+  if (!user && typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('tt_telegram_user')
+      if (saved) {
+        user = JSON.parse(saved)
+      }
+    } catch {}
+  }
+
+  // Save for future offline/reloads
+  if (user && typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('tt_telegram_user', JSON.stringify(user))
+    } catch {}
+  }
+
+  return user
 }
 
 export const getTelegramInitData = (): string => {

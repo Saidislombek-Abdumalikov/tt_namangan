@@ -21,7 +21,36 @@ const STATUS_MAP = {
 }
 
 export function OrderHistoryScreen({ navigate, setViewingOrder, addToCart, showToast, orders }: OrderHistoryProps) {
-  const displayOrders = orders && orders.length > 0 ? orders : MOCK_ORDERS
+  const displayOrders = orders || []
+
+  if (displayOrders.length === 0) {
+    return (
+      <div className="bg-surface-2 min-h-full">
+        <div className="bg-surface px-5 pt-12 pb-4 flex items-center gap-4">
+          <button onClick={() => navigate('profile')} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-2">
+            <ArrowLeft size={20} className="text-txt-1" />
+          </button>
+          <h1 className="text-txt-1 font-extrabold text-xl">Mening buyurtmalarim</h1>
+        </div>
+        <div className="px-5 pt-16 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 rounded-full bg-primary-light flex items-center justify-center text-3xl mb-4 text-primary">
+            📦
+          </div>
+          <h3 className="text-txt-1 font-extrabold text-lg mb-1">Hozircha buyurtmalar yo'q</h3>
+          <p className="text-txt-2 text-sm max-w-xs mb-6">
+            Tezkor Taom menyusidan sara taomlarni tanlang va birinchi buyurtmangizni bering!
+          </p>
+          <button
+            onClick={() => navigate('home')}
+            className="bg-primary text-white font-bold text-sm px-6 py-3 rounded-2xl shadow-sm active:scale-95 transition-transform"
+          >
+            🍽 Menyuni ko'rish
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-surface-2 min-h-full">
       <div className="bg-surface px-5 pt-12 pb-4 flex items-center gap-4">
@@ -397,9 +426,9 @@ const MENU_ITEMS = [
 ]
 
 export default function ProfileScreen({ navigate, user, orders, favoritesCount, userPhone, userLocation }: ProfileProps) {
-  const displayName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Mijoz'
-  const displayContact = userPhone || (user?.username ? `@${user.username}` : '+998 90 123 45 67')
-  const orderCount = orders ? orders.length : 12
+  const displayName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Foydalanuvchi'
+  const displayContact = userPhone || (user?.username ? `@${user.username}` : (user?.id ? `ID: ${user.id}` : 'Tezkor Taom a\'zosi'))
+  const orderCount = orders ? orders.length : 0
 
   return (
     <div className="bg-surface-2 min-h-full">

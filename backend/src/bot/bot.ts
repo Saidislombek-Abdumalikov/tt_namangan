@@ -63,60 +63,71 @@ export function buildWebAppUrl(data?: BotUserData): string {
     : 'https://tt-namangan.vercel.app'
   try {
     const url = new URL(baseUrl)
+    if (data?.telegramId) url.searchParams.set('tg_id', String(data.telegramId))
+    if (data?.firstName) url.searchParams.set('first_name', data.firstName)
+    if (data?.lastName) url.searchParams.set('last_name', data.lastName)
+    if (data?.username) url.searchParams.set('username', data.username)
     if (data?.phone) url.searchParams.set('phone', data.phone)
     if (data?.address) url.searchParams.set('address', data.address)
     if (data?.lat) url.searchParams.set('lat', String(data.lat))
     if (data?.lng) url.searchParams.set('lng', String(data.lng))
-    if (data?.firstName) url.searchParams.set('name', data.firstName)
     return url.toString()
   } catch (e) {
     return baseUrl
   }
 }
 
-function getPhoneKeyboard(webAppUrl?: string) {
-  const url = webAppUrl || buildWebAppUrl()
+export function getPhysicalKeyboard(userData: BotUserData) {
+  const webAppUrl = buildWebAppUrl(userData)
+  const kb = new Keyboard()
+    .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
+    .row()
+    .text('📦 Buyurtmalarim')
+    .text('☎️ Bog\'lanish')
+
+  if (!userData.phone) {
+    kb.row().requestContact('📱 Telefon raqamni yuborish')
+  }
+  if (!userData.address && !userData.lat) {
+    kb.row().requestLocation('📍 Joylashuvni yuborish')
+  }
+
+  return kb.resized().persistent()
+}
+
+function getPhoneKeyboard(userData?: BotUserData) {
+  const url = buildWebAppUrl(userData)
   return new Keyboard()
     .webApp('🍽 Menyuni ochish (Mini App)', url)
     .row()
-    .requestContact('📱 Telefon raqamni ulashish')
+    .requestContact('📱 Telefon raqamni yuborish')
     .row()
     .text('⬅️ Bekor qilish')
     .resized()
+    .persistent()
 }
 
-function getLocationKeyboard(webAppUrl?: string) {
-  const url = webAppUrl || buildWebAppUrl()
+function getLocationKeyboard(userData?: BotUserData) {
+  const url = buildWebAppUrl(userData)
   return new Keyboard()
     .webApp('🍽 Menyuni ochish (Mini App)', url)
     .row()
-    .requestLocation('📍 Joylashuvni ulashish')
+    .requestLocation('📍 Joylashuvni yuborish')
     .row()
     .text('➡️ Keyinroq kiritish')
     .text('⬅️ Bekor qilish')
     .resized()
+    .persistent()
 }
 
 function getMainMenuKeyboard(userData: BotUserData) {
-  const webAppUrl = buildWebAppUrl(userData)
-  return new Keyboard()
-    .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
-    .row()
-    .text('📦 Buyurtmalarim')
-    .text('📍 Manzilni yangilash')
-    .row()
-    .text('📱 Raqamni yangilash')
-    .text('☎️ Yordam')
-    .resized()
+  return getPhysicalKeyboard(userData)
 }
 
 function getInlineMenuKeyboard(userData: BotUserData) {
   const webAppUrl = buildWebAppUrl(userData)
   return new InlineKeyboard()
     .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
-    .row()
-    .text('📦 Buyurtmalarim', 'my_orders')
-    .text('☎️ Yordam', 'help')
 }
 
 // 1. /start command
@@ -130,6 +141,11 @@ bot.command('start', async ctx => {
     lastName: user.last_name,
     username: user.username,
   }
+
+  // Always keep user details up to date
+  userData.firstName = user.first_name
+  userData.lastName = user.last_name || userData.lastName
+  userData.username = user.username || userData.username
 
   // Sync to database if available
   try {
@@ -169,46 +185,13 @@ bot.command('start', async ctx => {
     // Ignore if not supported
   }
 
-  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> yetkazib berish xizmati botiga xush kelibsiz!\n\nBizda eng sara to'y oshi, shashliklar, somsa va fast food taomlarini to'g'ridan-to'g'ri Telegram ilovasi orqali tezkor buyurtma qilishingiz mumkin.\n\n👇 <b>Quyidagi tugmani bosing va menyuni oching:</b>`
-
-  if (!userData.phone) {
-    userData.step = 'awaiting_phone'
-    saveBotUser(userData)
-    await ctx.reply(welcomeText, {
-      parse_mode: 'HTML',
-      reply_markup: getPhoneKeyboard(appUrl),
-    })
-    await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
-      parse_mode: 'HTML',
-      reply_markup: getInlineMenuKeyboard(userData),
-    })
-    return
-  }
-
-  if (!userData.address && !userData.lat) {
-    userData.step = 'awaiting_location'
-    saveBotUser(userData)
-    await ctx.reply(welcomeText, {
-      parse_mode: 'HTML',
-      reply_markup: getLocationKeyboard(appUrl),
-    })
-    await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
-      parse_mode: 'HTML',
-      reply_markup: getInlineMenuKeyboard(userData),
-    })
-    return
-  }
-
-  userData.step = 'registered'
   saveBotUser(userData)
+
+  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> rasmiy yetkazib berish xizmati botiga xush kelibsiz!\n\nBizda sara tandir lavashlar, mangal hot-doglar, TT burgerlar, kombo to'plamlar va milliy taomlarni to'g'ridan-to'g'ri Telegram ilovasi orqali tezkor buyurtma qilishingiz mumkin.\n\n👇 <b>Pastdagi «🍽 Menyuni ochish (Mini App)» tugmasini bosing:</b>`
 
   await ctx.reply(welcomeText, {
     parse_mode: 'HTML',
-    reply_markup: getMainMenuKeyboard(userData),
-  })
-  await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
-    parse_mode: 'HTML',
-    reply_markup: getInlineMenuKeyboard(userData),
+    reply_markup: getPhysicalKeyboard(userData),
   })
 })
 
@@ -558,7 +541,6 @@ bot.hears('📦 Buyurtmalarim', async ctx => {
     telegramId: user.id,
     firstName: user.first_name,
   }
-  const webAppUrl = buildWebAppUrl(userData)
 
   try {
     const dbUser = await prisma.user.findUnique({
@@ -566,62 +548,47 @@ bot.hears('📦 Buyurtmalarim', async ctx => {
       include: {
         orders: {
           orderBy: { createdAt: 'desc' },
-          take: 3,
+          take: 5,
           include: { items: true },
         },
       },
     })
 
-    const isHttps = webAppUrl.startsWith('https://')
     if (!dbUser || dbUser.orders.length === 0) {
-      const kb = new InlineKeyboard()
-      if (isHttps) {
-        kb.webApp('🍽 Buyurtma berish', webAppUrl)
-      } else {
-        kb.url('🍽 Buyurtma berish', webAppUrl)
-      }
       await ctx.reply(
-        "Sizda hali buyurtmalar mavjud emas. Buyurtma berish uchun quyidagi '🍽 Buyurtma berish' tugmasini bosing!",
-        { reply_markup: kb }
+        "Sizda hali buyurtmalar mavjud emas.\n\nMenyudan sara taomlarni tanlab buyurtma berish uchun pastdagi <b>🍽 Menyuni ochish (Mini App)</b> tugmasini bosing!",
+        {
+          parse_mode: 'HTML',
+          reply_markup: getPhysicalKeyboard(userData),
+        }
       )
       return
     }
 
-    let msg = '<b>Sizning oxirgi buyurtmalaringiz:</b>\n\n'
+    let msg = '<b>Sizning buyurtmalaringiz:</b>\n\n'
     for (const ord of dbUser.orders) {
       msg += `📦 <b>#${ord.orderNumber}</b> — ${ord.total.toLocaleString('uz-UZ')} so'm\n`
       msg += `Holat: <i>${ord.status}</i> | Sana: ${new Date(ord.createdAt).toLocaleDateString('uz-UZ')}\n\n`
     }
 
-    const kb = new InlineKeyboard()
-    if (isHttps) {
-      kb.webApp('📱 Ilovani ochish', webAppUrl)
-    } else {
-      kb.url('📱 Ilovani ochish', webAppUrl)
-    }
-
     await ctx.reply(msg, {
       parse_mode: 'HTML',
-      reply_markup: kb,
+      reply_markup: getPhysicalKeyboard(userData),
     })
   } catch (e) {
-    const isHttps = webAppUrl.startsWith('https://')
-    const kb = new InlineKeyboard()
-    if (isHttps) {
-      kb.webApp('📱 Ilovani ochish', webAppUrl)
-    } else {
-      kb.url('📱 Ilovani ochish', webAppUrl)
-    }
     await ctx.reply(
-      "Buyurtmalar tarixini ko'rish uchun quyidagi tugma orqali ilovani oching:",
-      { reply_markup: kb }
+      "Buyurtmalar tarixini ko'rish uchun pastdagi <b>🍽 Menyuni ochish (Mini App)</b> tugmasini bosing!",
+      {
+        parse_mode: 'HTML',
+        reply_markup: getPhysicalKeyboard(userData),
+      }
     )
   }
 })
 
-// 9. Yordam
-bot.hears('☎️ Yordam', async ctx => {
-  const text = `☎️ <b>Bog'lanish va qo'llab-quvvatlash:</b>\n\n• Operator telefoni: +998 90 123 45 67\n• Admin bilan aloqa: @admin_namangan\n• Ish vaqti: 09:00 dan 23:00 gacha har kuni\n\nSavol va takliflaringiz bo'lsa, xush kelibsiz!`
+// 9. Bog'lanish va Yordam
+bot.hears(['☎️ Bog\'lanish', '☎️ Yordam'], async ctx => {
+  const text = `☎️ <b>«TEZKOR TAOM NAMANGAN» — Bog'lanish</b>\n\n• 📞 Buyurtma uchun tel: <b>(33) 675-55-50</b>\n• ✈️ Rasmiy Telegram: <b>@tezkorburger</b>\n• ⚡️ Yetkazib berish: <b>10 000 so'm</b> (Namangan shahri)\n• ⏰ Ish vaqti: <b>Har kuni 09:00 dan 23:00 gacha</b>\n\nIlovani ochish uchun pastdagi <b>🍽 Menyuni ochish</b> tugmasini bosing!`
   await ctx.reply(text, { parse_mode: 'HTML' })
 })
 

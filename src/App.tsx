@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Screen, CartItem, Order, Product } from './types'
 import { MOCK_ORDERS } from './data'
+import { api } from './services/api'
 import BottomNav from './components/BottomNav'
 import Toast from './components/Toast'
 import ProductSheet from './components/ProductSheet'
@@ -52,11 +53,7 @@ export default function App() {
 
   // Initialize screen based on onboarding completion in localStorage
   const [screen, setScreen] = useState<Screen>(() => {
-    if (typeof window !== 'undefined') {
-      const done = localStorage.getItem('tt_onboarding_done')
-      if (done === 'true') return 'home'
-    }
-    return 'onboarding'
+    return 'home'
   })
 
   const [tab, setTab] = useState<'home' | 'catalog' | 'cart' | 'profile'>('home')
@@ -97,7 +94,7 @@ export default function App() {
         console.warn('Failed to parse saved orders', e)
       }
     }
-    return MOCK_ORDERS
+    return []
   })
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -105,12 +102,23 @@ export default function App() {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null)
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
 
-  // Initialize Telegram WebApp and Bot Launch Data
+  // Initialize Telegram WebApp and Real Account Data
   useEffect(() => {
     initTelegramWebApp()
     const tgUser = getTelegramUser()
     if (tgUser) {
       setUser(tgUser)
+      // Authenticate with backend
+      const initData = getTelegramInitData()
+      if (initData) {
+        api.loginWithTelegram(initData).catch(() => {})
+      }
+      // Load real orders for this account
+      api.getUserOrders(tgUser.id, launchData.phone).then(realOrders => {
+        if (realOrders && realOrders.length > 0) {
+          setOrders(realOrders)
+        }
+      })
     }
     const data = getTelegramLaunchData()
     setLaunchData(data)

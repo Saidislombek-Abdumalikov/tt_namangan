@@ -1,7 +1,10 @@
 import { CATEGORIES, PRODUCTS, MOCK_ORDERS } from '../data'
 import type { Product, Order, CartItem } from '../types'
 
-const API_BASE = (typeof window !== 'undefined' && (window as any).__API_URL__) || 'http://localhost:5000/api'
+const API_BASE =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : '/api'
 
 export const api = {
   /**
@@ -82,6 +85,51 @@ export const api = {
   /**
    * Authenticate Telegram WebApp with backend.
    */
+    /**
+   * Fetch real orders for current user by telegramId or phone.
+   */
+  async getUserOrders(telegramId?: number | string, phone?: string): Promise<Order[]> {
+    try {
+      const params = new URLSearchParams()
+      if (telegramId) params.append('telegramId', String(telegramId))
+      if (phone) params.append('phone', phone)
+      const res = await fetch(`${API_BASE}/orders?${params.toString()}`)
+      if (res.ok) {
+        const rawOrders = await res.json()
+        if (Array.isArray(rawOrders)) {
+          return rawOrders.map((o: any) => ({
+            id: o.id,
+            number: o.orderNumber || o.number || o.id.slice(0, 6).toUpperCase(),
+            date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('uz-UZ') : 'Yaqinda',
+            items: (o.items || []).map((it: any) => ({
+              product: {
+                id: it.productId || it.id,
+                name: it.productName || it.name || 'Taom',
+                price: it.price || 0,
+                image: it.image || 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=400&h=300&fit=crop',
+                category: 'lavash',
+                inStock: true,
+              },
+              quantity: it.quantity || 1,
+              extras: it.extras || [],
+              totalPrice: (it.price || 0) * (it.quantity || 1),
+            })),
+            subtotal: o.subtotal || 0,
+            deliveryFee: o.deliveryFee || 10000,
+            discount: o.discount || 0,
+            total: o.total || 0,
+            status: (o.status?.toLowerCase() as any) || 'pending',
+            address: o.address,
+            courier: o.courier?.name,
+          }))
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch user orders from backend:', e)
+    }
+    return []
+  },
+
   async loginWithTelegram(initData: string) {
     if (!initData) return null
     try {
