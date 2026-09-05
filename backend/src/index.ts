@@ -35,25 +35,34 @@ app.use('/api/products', productsRouter)
 app.use('/api/orders', ordersRouter)
 app.use('/api/admin', adminRouter)
 
-// Start Express Server
-const server = app.listen(config.port, () => {
-  console.log(`🚀 Namangan Food Backend is running on port ${config.port}`)
-  console.log(`📡 Health check: http://localhost:${config.port}/api/health`)
-})
+// Webhook route for Telegram Bot on Vercel / serverless
+import { webhookCallback } from 'grammy'
+app.use('/api/bot', webhookCallback(bot, 'express'))
 
-// Start Telegram Bot
-if (config.botToken && config.botToken !== '123456:dummy_token_for_local_development') {
-  bot.start({
-    onStart: botInfo => {
-      console.log(`🤖 Telegram Bot started as @${botInfo.username}`)
-    },
+export default app
+export { app }
+
+// Start Express Server locally (skip in Vercel serverless environment)
+if (!process.env.VERCEL) {
+  const server = app.listen(config.port, () => {
+    console.log(`🚀 Namangan Food Backend is running on port ${config.port}`)
+    console.log(`📡 Health check: http://localhost:${config.port}/api/health`)
   })
-} else {
-  console.log('ℹ️ Telegram Bot token not provided or is in dummy mode. Bot polling skipped.')
-}
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('Shutting down server...')
-  server.close(() => process.exit(0))
-})
+  // Start Telegram Bot polling locally
+  if (config.botToken && config.botToken !== '123456:dummy_token_for_local_development') {
+    bot.start({
+      onStart: botInfo => {
+        console.log(`🤖 Telegram Bot started as @${botInfo.username}`)
+      },
+    })
+  } else {
+    console.log('ℹ️ Telegram Bot token not provided or is in dummy mode. Bot polling skipped.')
+  }
+
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('Shutting down server...')
+    server.close(() => process.exit(0))
+  })
+}
