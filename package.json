@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:api": "esbuild backend/src/app.ts --bundle --platform=node --target=node20 --format=esm --external:@prisma/client --outfile=api/index.js",
+    "build": "prisma generate && esbuild backend/src/app.ts --bundle --platform=node --target=node20 --format=cjs --external:@prisma/client --outfile=api/app.cjs && vite build",
+    "build:api": "esbuild backend/src/app.ts --bundle --platform=node --target=node20 --format=cjs --external:@prisma/client --outfile=api/app.cjs",
     "postinstall": "prisma generate || true",
     "preview": "vite preview",
     "format": "oxfmt"

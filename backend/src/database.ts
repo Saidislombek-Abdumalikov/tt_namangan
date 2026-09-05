@@ -12,7 +12,7 @@ export const prisma =
       db: {
         url:
           process.env.DATABASE_URL ||
-          'postgresql://postgres.zogqpyaqltjmtczvahmz:Saidislom*2008@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true',
+          'postgresql://postgres.zogqpyaqltjmtczvahmz:Saidislom*2008@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connect_timeout=20&pool_timeout=20',
       },
     },
   })

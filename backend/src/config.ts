@@ -3,7 +3,7 @@ import dotenv from 'dotenv'
 // Guarantee essential production environment variables
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
-    'postgresql://postgres.zogqpyaqltjmtczvahmz:Saidislom*2008@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true'
+    'postgresql://postgres.zogqpyaqltjmtczvahmz:Saidislom*2008@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connect_timeout=20&pool_timeout=20'
 }
 if (!process.env.BOT_TOKEN) {
   process.env.BOT_TOKEN = '8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE'
