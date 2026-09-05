@@ -7,6 +7,7 @@ import { productsRouter } from './routes/products'
 import { ordersRouter } from './routes/orders'
 import { adminRouter } from './routes/admin'
 import { bot } from './bot/bot'
+import { webhookCallback } from 'grammy'
 
 // Support BigInt serialization in JSON responses
 ;(BigInt.prototype as any).toJSON = function () {
@@ -36,7 +37,6 @@ app.use('/api/orders', ordersRouter)
 app.use('/api/admin', adminRouter)
 
 // Webhook route for Telegram Bot on Vercel / serverless
-import { webhookCallback } from 'grammy'
 app.use('/api/bot', webhookCallback(bot, 'express'))
 
 export default app
