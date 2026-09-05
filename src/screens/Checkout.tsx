@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ArrowLeft, MapPin } from 'lucide-react'
 import type { AppProps, Order, CartItem } from '../types'
 import { formatPrice } from '../data'
@@ -33,12 +33,18 @@ export default function Checkout({
 }: CheckoutProps) {
   const defaultName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_name') || '' : '')
   const [name, setName] = useState(defaultName)
-  const [phone, setPhone] = useState(userPhone || (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_phone') || '' : ''))
+
+  const rawPhone = userPhone || (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_phone') || '' : '')
+  let cleanPhone = rawPhone.trim().replace(/^ /, '+').replace(/[^\d+]/g, '')
+  if (cleanPhone && !cleanPhone.startsWith('+') && cleanPhone.length >= 9) cleanPhone = '+' + cleanPhone
+
+  const [phone, setPhone] = useState(cleanPhone)
   const [address, setAddress] = useState(userLocation || (typeof localStorage !== 'undefined' ? localStorage.getItem('tt_customer_address') || '' : ''))
   const [locationShared, setLocationShared] = useState(Boolean(userLocation))
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const savedPromo = typeof window !== 'undefined' ? localStorage.getItem('tt_promo') : null
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
@@ -46,8 +52,6 @@ export default function Checkout({
   let discount = 0
   if (savedPromo && ['TT10', 'YANGI', 'NAMANGAN', 'TAOM10', 'CHEGIRMA'].includes(savedPromo.toUpperCase())) {
     discount = Math.round(subtotal * 0.1)
-  } else if (subtotal > 50000) {
-    discount = 5000
   }
   const total = Math.max(0, subtotal + deliveryFee - discount)
 
@@ -101,6 +105,8 @@ export default function Checkout({
   }
 
   const handleOrder = async () => {
+    if (isSubmittingRef.current || loading) return
+
     if (!name.trim()) {
       showToast('⚠️ Ismingizni kiriting')
       triggerHaptic('notification', 'warning')
@@ -116,6 +122,8 @@ export default function Checkout({
       triggerHaptic('notification', 'warning')
       return
     }
+
+    isSubmittingRef.current = true
     setLoading(true)
 
     try {
@@ -241,7 +249,12 @@ export default function Checkout({
               <label className="text-txt-2 text-xs font-medium block mb-1">Telefon raqam</label>
               <input
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
+                placeholder="+998 90 123 45 67"
+                onChange={e => {
+                  let val = e.target.value
+                  if (val.startsWith(' ')) val = '+' + val.trim()
+                  setPhone(val)
+                }}
                 className="w-full bg-surface-2 border border-bdr rounded-xl px-4 py-3 text-txt-1 text-sm font-medium outline-none focus:border-primary transition-colors"
               />
             </div>

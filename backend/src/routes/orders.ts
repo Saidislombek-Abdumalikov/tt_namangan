@@ -92,7 +92,7 @@ ordersRouter.post('/', async (req, res): Promise<void> => {
     // Notify customer via Telegram bot
     try {
       const tgId = order.user?.telegramId || effectiveTgId
-      if (tgId) {
+      if (tgId && Number(tgId) > 0 && String(tgId) !== String(config.ordersChatId)) {
         await TelegramNotifier.notifyCustomer(tgId, order.orderNumber, 'CREATED')
       }
     } catch (custErr) {

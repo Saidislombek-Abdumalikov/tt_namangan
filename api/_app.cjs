@@ -23227,7 +23227,7 @@ var require_main = __commonJS({
         return { parsed: parsedAll };
       }
     }
-    function config2(options) {
+    function config3(options) {
       if (_dotenvKey(options).length === 0) {
         return DotenvModule.configDotenv(options);
       }
@@ -23294,7 +23294,7 @@ var require_main = __commonJS({
       configDotenv,
       _configVault,
       _parseVault,
-      config: config2,
+      config: config3,
       decrypt,
       parse,
       populate
@@ -35647,17 +35647,17 @@ var require_client = __commonJS({
           const formDataRequired = (0, payload_js_1.requiresFormDataUpload)(payload);
           if (this.webhookReplyEnvelope.send !== void 0 && !this.hasUsedWebhookReply && !formDataRequired && opts.canUseWebhookReply(method)) {
             this.hasUsedWebhookReply = true;
-            const config3 = (0, payload_js_1.createJsonPayload)({ ...payload, method });
-            await this.webhookReplyEnvelope.send(config3.body);
+            const config4 = (0, payload_js_1.createJsonPayload)({ ...payload, method });
+            await this.webhookReplyEnvelope.send(config4.body);
             return { ok: true, result: true };
           }
           const { controller, unregisterSignal } = createAbortControllerFromSignal(signal);
           const timeout = createTimeout(controller, opts.timeoutSeconds, method);
           const streamErr = createStreamError(controller);
           const url = opts.buildUrl(opts.apiRoot, this.token, method, opts.environment);
-          const config2 = formDataRequired ? (0, payload_js_1.createFormDataPayload)(payload, (err) => streamErr.catch(err)) : (0, payload_js_1.createJsonPayload)(payload);
+          const config3 = formDataRequired ? (0, payload_js_1.createFormDataPayload)(payload, (err) => streamErr.catch(err)) : (0, payload_js_1.createJsonPayload)(payload);
           const sig = controller.signal;
-          const options2 = { ...opts.baseFetchConfig, signal: sig, ...config2 };
+          const options2 = { ...opts.baseFetchConfig, signal: sig, ...config3 };
           const successPromise = this.fetch(url, options2).then((res) => res.json());
           const operations = [successPromise, streamErr.promise, timeout.promise];
           try {
@@ -38512,7 +38512,7 @@ var require_bot = __commonJS({
        * @param token The bot's token as acquired from https://t.me/BotFather
        * @param config Optional configuration properties for the bot
        */
-      constructor(token, config2) {
+      constructor(token, config3) {
         var _a;
         super();
         this.token = token;
@@ -38532,9 +38532,9 @@ var require_bot = __commonJS({
         };
         if (!token)
           throw new Error("Empty token!");
-        this.me = config2 === null || config2 === void 0 ? void 0 : config2.botInfo;
-        this.clientConfig = config2 === null || config2 === void 0 ? void 0 : config2.client;
-        this.ContextConstructor = (_a = config2 === null || config2 === void 0 ? void 0 : config2.ContextConstructor) !== null && _a !== void 0 ? _a : context_js_1.Context;
+        this.me = config3 === null || config3 === void 0 ? void 0 : config3.botInfo;
+        this.clientConfig = config3 === null || config3 === void 0 ? void 0 : config3.client;
+        this.ContextConstructor = (_a = config3 === null || config3 === void 0 ? void 0 : config3.ContextConstructor) !== null && _a !== void 0 ? _a : context_js_1.Context;
         this.api = new api_js_1.Api(token, this.clientConfig);
       }
       /**
@@ -41476,7 +41476,7 @@ try {
   import_dotenv.default.config();
 } catch {
 }
-var config = {
+var config2 = {
   port: parseInt(process.env.PORT || "5000", 10),
   nodeEnv: process.env.NODE_ENV || "development",
   databaseUrl: process.env.DATABASE_URL,
@@ -41530,7 +41530,7 @@ function validateTelegramInitData(initData, botToken) {
   }
 }
 function generateToken(user) {
-  return import_jsonwebtoken.default.sign(user, config.jwtSecret, { expiresIn: "7d" });
+  return import_jsonwebtoken.default.sign(user, config2.jwtSecret, { expiresIn: "7d" });
 }
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -41551,7 +41551,7 @@ function requireAuth(req, res, next) {
     return;
   }
   try {
-    const decoded = import_jsonwebtoken.default.verify(token, config.jwtSecret);
+    const decoded = import_jsonwebtoken.default.verify(token, config2.jwtSecret);
     req.user = decoded;
     next();
   } catch (err) {
@@ -41578,8 +41578,8 @@ authRouter.post("/telegram", async (req, res) => {
       return;
     }
     let telegramUser = null;
-    if (config.botToken && config.botToken !== "123456:dummy_token_for_local_development") {
-      const validation = validateTelegramInitData(initData, config.botToken);
+    if (config2.botToken && config2.botToken !== "123456:dummy_token_for_local_development") {
+      const validation = validateTelegramInitData(initData, config2.botToken);
       if (!validation.valid || !validation.user) {
         res.status(401).json({ error: "Telegram autentifikatsiya ma\u02BClumotlari yaroqsiz" });
         return;
@@ -42116,8 +42116,6 @@ var OrderService = class {
       if (["TT10", "YANGI", "NAMANGAN", "TAOM10", "CHEGIRMA"].includes(code)) {
         discount = Math.round(subtotal * 0.1);
       }
-    } else if (subtotal > 5e4) {
-      discount = 5e3;
     }
     const total = Math.max(0, subtotal + deliveryFee - discount);
     const orderNumber = await generateOrderNumber();
@@ -42393,7 +42391,7 @@ var import_grammy2 = __toESM(require_mod2());
 var import_grammy = __toESM(require_mod2());
 var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
-var bot = new import_grammy.Bot(config.botToken || "8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE");
+var bot = new import_grammy.Bot(config2.botToken || "8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE");
 bot.catch((err) => {
   console.error(`Error in bot while handling update ${err.ctx?.update?.update_id}:`, err.error);
 });
@@ -42429,14 +42427,18 @@ function saveBotUser(user) {
   }
 }
 function buildWebAppUrl(data) {
-  const baseUrl = config.webAppUrl.startsWith("https://") ? config.webAppUrl : "https://tt-namangan.vercel.app";
+  const baseUrl = config2.webAppUrl.startsWith("https://") ? config2.webAppUrl : "https://tt-namangan.vercel.app";
   try {
     const url = new URL(baseUrl);
     if (data?.telegramId) url.searchParams.set("tg_id", String(data.telegramId));
     if (data?.firstName) url.searchParams.set("first_name", data.firstName);
     if (data?.lastName) url.searchParams.set("last_name", data.lastName);
     if (data?.username) url.searchParams.set("username", data.username);
-    if (data?.phone) url.searchParams.set("phone", data.phone);
+    if (data?.phone) {
+      let cleanPhone = data.phone.trim().replace(/[^\d+]/g, "");
+      if (!cleanPhone.startsWith("+") && cleanPhone.length >= 9) cleanPhone = "+" + cleanPhone;
+      url.searchParams.set("phone", cleanPhone);
+    }
     if (data?.address) url.searchParams.set("address", data.address);
     if (data?.lat) url.searchParams.set("lat", String(data.lat));
     if (data?.lng) url.searchParams.set("lng", String(data.lng));
@@ -42560,8 +42562,8 @@ bot.on("message:contact", async (ctx) => {
   const contact = ctx.message.contact;
   const user = ctx.from;
   if (!contact || !user) return;
-  let phone = contact.phone_number.trim();
-  if (!phone.startsWith("+")) {
+  let phone = contact.phone_number.trim().replace(/[^\d+]/g, "");
+  if (!phone.startsWith("+") && phone.length >= 9) {
     phone = "+" + phone;
   }
   let userData = userStore[String(user.id)] || {
@@ -42952,13 +42954,26 @@ bot.on("callback_query:data", async (ctx) => {
   } else if (data.startsWith("order_courier_menu:")) {
     const [, orderId] = data.split(":");
     try {
-      const couriers = await prisma.courier.findMany({ where: { isActive: true } });
+      let couriers = await prisma.courier.findMany({ where: { isActive: true } });
       if (couriers.length === 0) {
-        await ctx.answerCallbackQuery({
-          text: "Faol kuryerlar topilmadi.",
-          show_alert: true
-        });
-        return;
+        try {
+          await prisma.courier.createMany({
+            data: [
+              { name: "Aziz Rahimov", phone: "+998 90 123 45 67", isActive: true },
+              { name: "Bobur Mirzayev", phone: "+998 91 234 56 78", isActive: true },
+              { name: "Jasur Toshmatov", phone: "+998 93 345 67 89", isActive: true }
+            ],
+            skipDuplicates: true
+          });
+          couriers = await prisma.courier.findMany({ where: { isActive: true } });
+        } catch {
+        }
+      }
+      if (couriers.length === 0) {
+        couriers = [
+          { id: "courier-default-1", name: "Aziz Rahimov", phone: "+998 90 123 45 67", isActive: true },
+          { id: "courier-default-2", name: "Bobur Mirzayev", phone: "+998 91 234 56 78", isActive: true }
+        ];
       }
       const kb = new import_grammy.InlineKeyboard();
       for (const c of couriers) {
@@ -43013,7 +43028,8 @@ function formatOrderMessage2(order) {
 \u{1F69A} <b>Kuryer:</b> ${escapeHtml(order.courier.name)} (${escapeHtml(order.courier.phone)})` : "";
   const customerName = escapeHtml(`${order.user?.firstName || "Mijoz"} ${order.user?.lastName || ""}`.trim());
   const mapsText = order.latitude && order.longitude ? `
-\u{1F5FA} <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>` : "";
+\u{1F5FA} <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>
+\u{1F4CD} <i>Koordinatalar: ${order.latitude}, ${order.longitude}</i>` : "";
   const createdTime = new Date(order.createdAt || Date.now()).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
   const updatedTime = order.updatedAt ? new Date(order.updatedAt).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : createdTime;
   const timingText = `
@@ -43099,7 +43115,7 @@ var TelegramNotifier = class {
    * Posts the order to the restaurant/courier operational Telegram group.
    */
   static async sendOrderToGroup(order) {
-    if (!config.botToken || !config.ordersChatId) {
+    if (!config2.botToken || !config2.ordersChatId) {
       console.warn("\u26A0\uFE0F Telegram Bot Token or Orders Chat ID not configured. Group notification skipped.");
       return;
     }
@@ -43110,11 +43126,11 @@ var TelegramNotifier = class {
       if (resolvedChatId) {
         targets.push(resolvedChatId);
       } else {
-        targets.push(config.ordersChatId);
-        if (config.ordersChatId.startsWith("-") && !config.ordersChatId.startsWith("-100")) {
-          targets.push("-100" + config.ordersChatId.slice(1));
-        } else if (config.ordersChatId.startsWith("-100")) {
-          targets.push("-" + config.ordersChatId.slice(4));
+        targets.push(config2.ordersChatId);
+        if (config2.ordersChatId.startsWith("-") && !config2.ordersChatId.startsWith("-100")) {
+          targets.push("-100" + config2.ordersChatId.slice(1));
+        } else if (config2.ordersChatId.startsWith("-100")) {
+          targets.push("-" + config2.ordersChatId.slice(4));
         }
       }
       let sentMsg = null;
@@ -43157,15 +43173,8 @@ var TelegramNotifier = class {
         } catch {
           order.telegramMessageId = sentMsg.message_id;
         }
-        if (order.latitude && order.longitude) {
-          try {
-            await bot.api.sendLocation(sentMsg.chat.id, Number(order.latitude), Number(order.longitude));
-          } catch (locErr) {
-            console.warn("Could not send native location pin to group:", locErr);
-          }
-        }
       } else if (lastErr) {
-        console.warn(`\u26A0\uFE0F Buyurtmani Telegram guruhiga yuborib bo'lmadi (${config.ordersChatId}). Sabab: ${lastErr?.message || lastErr}. Iltimos, @tt_namangan_bot ni ushbu guruhga a'zo yoki admin qilib qo'shing.`);
+        console.warn(`\u26A0\uFE0F Buyurtmani Telegram guruhiga yuborib bo'lmadi (${config2.ordersChatId}). Sabab: ${lastErr?.message || lastErr}. Iltimos, @tt_namangan_bot ni ushbu guruhga a'zo yoki admin qilib qo'shing.`);
       }
     } catch (err) {
       console.error("Failed to send order to operational group:", err);
@@ -43175,8 +43184,8 @@ var TelegramNotifier = class {
    * Updates an existing order message in the group with the new status and buttons.
    */
   static async updateGroupOrderMessage(order) {
-    const targetChatId = resolvedChatId || config.ordersChatId;
-    if (!config.botToken || !targetChatId || !order.telegramMessageId) {
+    const targetChatId = resolvedChatId || config2.ordersChatId;
+    if (!config2.botToken || !targetChatId || !order.telegramMessageId) {
       return;
     }
     try {
@@ -43194,7 +43203,8 @@ var TelegramNotifier = class {
    * Sends customer status update notification.
    */
   static async notifyCustomer(telegramId, orderNumber, status) {
-    if (!config.botToken || !telegramId) return;
+    const idNum = Number(telegramId);
+    if (!config2.botToken || !idNum || idNum <= 0) return;
     let text = "";
     switch (status) {
       case "CREATED":
@@ -43334,7 +43344,7 @@ ordersRouter.post("/", async (req, res) => {
     }
     try {
       const tgId = order.user?.telegramId || effectiveTgId;
-      if (tgId) {
+      if (tgId && Number(tgId) > 0 && String(tgId) !== String(config.ordersChatId)) {
         await TelegramNotifier.notifyCustomer(tgId, order.orderNumber, "CREATED");
       }
     } catch (custErr) {
@@ -44204,19 +44214,19 @@ app.get(["/api/health", "/health"], (req, res) => {
 });
 app.get(["/api/bot/setup", "/bot/setup"], async (req, res) => {
   try {
-    const webhookUrl = `${config.webAppUrl}/api/bot`;
+    const webhookUrl = `${config2.webAppUrl}/api/bot`;
     await bot.api.setWebhook(webhookUrl);
     await bot.api.setChatMenuButton({
       menu_button: {
         type: "web_app",
         text: "\u{1F37D} Menyuni ochish",
-        web_app: { url: config.webAppUrl }
+        web_app: { url: config2.webAppUrl }
       }
     });
     res.json({
       success: true,
       webhookUrl,
-      menuUrl: config.webAppUrl,
+      menuUrl: config2.webAppUrl,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (err) {

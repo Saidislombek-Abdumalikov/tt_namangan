@@ -170,8 +170,6 @@ export class OrderService {
       if (['TT10', 'YANGI', 'NAMANGAN', 'TAOM10', 'CHEGIRMA'].includes(code)) {
         discount = Math.round(subtotal * 0.1) // 10% promo discount
       }
-    } else if (subtotal > 50000) {
-      discount = 5000
     }
     const total = Math.max(0, subtotal + deliveryFee - discount)
     const orderNumber = await generateOrderNumber()

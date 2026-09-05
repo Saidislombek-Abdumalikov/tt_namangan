@@ -86,6 +86,13 @@ function ProductGridCard({ product, isFav, onFav, onTap, onAdd }: {
             -{product.discount}%
           </div>
         )}
+        {!product.inStock && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="text-white text-xs font-semibold bg-black/60 px-3 py-1 rounded-full">
+              Mavjud emas
+            </span>
+          </div>
+        )}
         <button
           onClick={e => { e.stopPropagation(); onFav() }}
           className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-xs"
@@ -105,13 +112,17 @@ function ProductGridCard({ product, isFav, onFav, onTap, onAdd }: {
               <div className="text-txt-3 text-[11px] line-through mt-0.5">{formatPrice(product.oldPrice)}</div>
             )}
           </div>
-          <button
-            onClick={onAdd}
-            className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center active:bg-primary-press transition-colors shadow-xs"
-            title="Savatchaga qo'shish"
-          >
-            <Plus size={16} className="text-white" />
-          </button>
+          {product.inStock ? (
+            <button
+              onClick={onAdd}
+              className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center active:bg-primary-press transition-colors shadow-xs"
+              title="Savatchaga qo'shish"
+            >
+              <Plus size={16} className="text-white" />
+            </button>
+          ) : (
+            <span className="text-xs text-txt-3 font-semibold bg-surface-3 px-2 py-1 rounded-lg">Tugagan</span>
+          )}
         </div>
       </div>
     </div>

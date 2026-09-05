@@ -229,7 +229,13 @@ export const getTelegramLaunchData = (): TelegramLaunchData => {
     const lng = urlParams.get('lng')
     const name = urlParams.get('name')
 
-    if (phone) result.phone = phone
+    if (phone) {
+      let clean = phone.trim()
+      if (clean.startsWith(' ')) clean = '+' + clean.trim()
+      clean = clean.replace(/[^\d+]/g, '')
+      if (!clean.startsWith('+') && clean.length >= 9) clean = '+' + clean
+      result.phone = clean
+    }
     if (address) result.address = decodeURIComponent(address)
     if (lat && !isNaN(Number(lat))) result.lat = Number(lat)
     if (lng && !isNaN(Number(lng))) result.lng = Number(lng)
@@ -247,7 +253,9 @@ export const getTelegramLaunchData = (): TelegramLaunchData => {
       if (startParam.startsWith('loc_')) {
         result.address = decodeURIComponent(startParam.slice(4).replace(/_/g, ' '))
       } else if (startParam.startsWith('p_')) {
-        result.phone = '+' + startParam.slice(2)
+        let p = startParam.slice(2).replace(/[^\d+]/g, '')
+        if (!p.startsWith('+')) p = '+' + p
+        result.phone = p
       }
     }
   } catch (e) {
@@ -258,7 +266,11 @@ export const getTelegramLaunchData = (): TelegramLaunchData => {
   try {
     if (!result.phone) {
       const savedPhone = localStorage.getItem('tt_user_phone')
-      if (savedPhone) result.phone = savedPhone
+      if (savedPhone) {
+        let clean = savedPhone.trim().replace(/^ /, '+').replace(/[^\d+]/g, '')
+        if (!clean.startsWith('+') && clean.length >= 9) clean = '+' + clean
+        result.phone = clean
+      }
     }
     if (!result.address) {
       const savedAddr = localStorage.getItem('tt_user_address')

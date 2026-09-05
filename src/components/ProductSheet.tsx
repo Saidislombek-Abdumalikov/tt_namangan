@@ -181,11 +181,22 @@ export default function ProductSheet({ product, isFavorite, onClose, onAdd, onTo
         <div className="absolute bottom-0 left-0 right-0 bg-surface border-t border-bdr px-5 pt-3 pb-5">
           <button
             onClick={handleAdd}
-            className="w-full bg-primary text-white font-bold text-base py-4 rounded-2xl active:bg-primary-press transition-colors flex items-center justify-center gap-2"
+            disabled={!product.inStock}
+            className={`w-full font-bold text-base py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors ${
+              product.inStock
+                ? 'bg-primary text-white active:bg-primary-press shadow-md'
+                : 'bg-surface-3 text-txt-3 cursor-not-allowed border border-bdr'
+            }`}
           >
-            <span>Savatchaga qo'shish</span>
-            <span className="opacity-80">—</span>
-            <span>{formatPrice(totalPrice)}</span>
+            {product.inStock ? (
+              <>
+                <span>Savatchaga qo'shish</span>
+                <span className="opacity-80">—</span>
+                <span>{formatPrice(totalPrice)}</span>
+              </>
+            ) : (
+              <span>Hozirda mavjud emas (Tugagan)</span>
+            )}
           </button>
         </div>
       </div>

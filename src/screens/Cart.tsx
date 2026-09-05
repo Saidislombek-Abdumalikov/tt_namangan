@@ -43,12 +43,10 @@ export default function Cart({ navigate, cart, removeFromCart, updateQuantity, a
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
   const deliveryFee = subtotal > 0 ? 10000 : 0
   
-  // Discount: either from valid promo (10%) or standard order threshold (5,000 UZS if > 50,000 UZS)
+  // Discount: from valid promo (10%)
   let discount = 0
   if (promoApplied && promoCode && VALID_PROMOS[promoCode.toUpperCase()]) {
     discount = Math.round(subtotal * VALID_PROMOS[promoCode.toUpperCase()])
-  } else if (subtotal > 50000) {
-    discount = 5000
   }
 
   const total = Math.max(0, subtotal + deliveryFee - discount)

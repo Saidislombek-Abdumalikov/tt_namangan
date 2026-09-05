@@ -27,7 +27,7 @@ export function formatOrderMessage(order: any): string {
   const customerName = escapeHtml(`${order.user?.firstName || 'Mijoz'} ${order.user?.lastName || ''}`.trim())
 
   const mapsText = (order.latitude && order.longitude)
-    ? `\n🗺 <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>`
+    ? `\n🗺 <b>Lokatsiya:</b> <a href="https://maps.google.com/?q=${order.latitude},${order.longitude}">Google Xarita</a> | <a href="https://yandex.com/maps/?pt=${order.longitude},${order.latitude}&z=17&l=map">Yandex Xarita</a>\n📍 <i>Koordinatalar: ${order.latitude}, ${order.longitude}</i>`
     : ''
 
   const createdTime = new Date(order.createdAt || Date.now()).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
@@ -185,15 +185,6 @@ export class TelegramNotifier {
         } catch {
           order.telegramMessageId = sentMsg.message_id
         }
-
-        // Send exact Telegram location pin for couriers if coordinates are available
-        if (order.latitude && order.longitude) {
-          try {
-            await bot.api.sendLocation(sentMsg.chat.id, Number(order.latitude), Number(order.longitude))
-          } catch (locErr) {
-            console.warn('Could not send native location pin to group:', locErr)
-          }
-        }
       } else if (lastErr) {
         console.warn(`⚠️ Buyurtmani Telegram guruhiga yuborib bo'lmadi (${config.ordersChatId}). Sabab: ${lastErr?.message || lastErr}. Iltimos, @tt_namangan_bot ni ushbu guruhga a'zo yoki admin qilib qo'shing.`)
       }
@@ -228,7 +219,10 @@ export class TelegramNotifier {
    * Sends customer status update notification.
    */
   static async notifyCustomer(telegramId: bigint | number | string, orderNumber: string, status: string) {
-    if (!config.botToken || !telegramId) return
+    const idNum = Number(telegramId)
+    // Only send to individual customer private chats (positive Telegram user IDs)
+    // Never send to channels/groups (which have negative IDs)
+    if (!config.botToken || !idNum || idNum <= 0) return
 
     let text = ''
     switch (status) {
