@@ -139,8 +139,8 @@ export default function Home({
       <div className="bg-surface px-5 pt-12 pb-4 border-b border-bdr/60">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-primary text-white font-black text-lg flex items-center justify-center shadow-sm tracking-tight">
-              TT
+            <div className="w-11 h-11 rounded-2xl overflow-hidden border border-bdr shadow-xs bg-white flex items-center justify-center shrink-0">
+              <img src="/logo.jpg" alt="Tezkor Taom" className="w-full h-full object-contain p-0.5" />
             </div>
             <div>
               <div className="text-txt-3 text-[11px] font-semibold flex items-center gap-1">

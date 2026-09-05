@@ -28,14 +28,11 @@ export interface BotUserData {
   step?: 'awaiting_phone' | 'awaiting_location' | 'registered'
 }
 
-const DATA_DIR = path.resolve(__dirname, '../../data')
+const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.resolve(__dirname, '../../data')
 const USERS_FILE = path.join(DATA_DIR, 'bot_users.json')
 
 function loadBotUsers(): Record<string, BotUserData> {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
     if (fs.existsSync(USERS_FILE)) {
       const raw = fs.readFileSync(USERS_FILE, 'utf-8')
       return JSON.parse(raw)
@@ -56,62 +53,54 @@ function saveBotUser(user: BotUserData) {
     }
     fs.writeFileSync(USERS_FILE, JSON.stringify(userStore, null, 2), 'utf-8')
   } catch (err) {
-    console.warn('Could not write bot_users.json:', err)
+    // Fail silently in read-only environment
   }
 }
 
-export function buildWebAppUrl(data: BotUserData): string {
-  const baseUrl = config.webAppUrl || 'http://localhost:8443'
+export function buildWebAppUrl(data?: BotUserData): string {
+  const baseUrl = config.webAppUrl.startsWith('https://')
+    ? config.webAppUrl
+    : 'https://tt-namangan.vercel.app'
   try {
     const url = new URL(baseUrl)
-    if (data.phone) url.searchParams.set('phone', data.phone)
-    if (data.address) url.searchParams.set('address', data.address)
-    if (data.lat) url.searchParams.set('lat', String(data.lat))
-    if (data.lng) url.searchParams.set('lng', String(data.lng))
-    if (data.firstName) url.searchParams.set('name', data.firstName)
+    if (data?.phone) url.searchParams.set('phone', data.phone)
+    if (data?.address) url.searchParams.set('address', data.address)
+    if (data?.lat) url.searchParams.set('lat', String(data.lat))
+    if (data?.lng) url.searchParams.set('lng', String(data.lng))
+    if (data?.firstName) url.searchParams.set('name', data.firstName)
     return url.toString()
   } catch (e) {
-    const params: string[] = []
-    if (data.phone) params.push(`phone=${encodeURIComponent(data.phone)}`)
-    if (data.address) params.push(`address=${encodeURIComponent(data.address)}`)
-    if (data.lat) params.push(`lat=${data.lat}`)
-    if (data.lng) params.push(`lng=${data.lng}`)
-    if (data.firstName) params.push(`name=${encodeURIComponent(data.firstName)}`)
-    return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl
+    return baseUrl
   }
 }
 
-function getPhoneKeyboard() {
+function getPhoneKeyboard(webAppUrl?: string) {
+  const url = webAppUrl || buildWebAppUrl()
   return new Keyboard()
-    .requestContact('📱 Telefon raqamni yuborish')
+    .webApp('🍽 Menyuni ochish (Mini App)', url)
+    .row()
+    .requestContact('📱 Telefon raqamni ulashish')
     .row()
     .text('⬅️ Bekor qilish')
     .resized()
-    .oneTime()
 }
 
-function getLocationKeyboard() {
+function getLocationKeyboard(webAppUrl?: string) {
+  const url = webAppUrl || buildWebAppUrl()
   return new Keyboard()
-    .requestLocation('📍 Joylashuvni yuborish')
+    .webApp('🍽 Menyuni ochish (Mini App)', url)
+    .row()
+    .requestLocation('📍 Joylashuvni ulashish')
     .row()
     .text('➡️ Keyinroq kiritish')
     .text('⬅️ Bekor qilish')
     .resized()
-    .oneTime()
 }
 
 function getMainMenuKeyboard(userData: BotUserData) {
   const webAppUrl = buildWebAppUrl(userData)
-  const isHttps = webAppUrl.startsWith('https://')
-  const kb = new Keyboard()
-
-  if (isHttps) {
-    kb.webApp('🍽 Buyurtma berish', webAppUrl)
-  } else {
-    kb.text('🍽 Buyurtma berish')
-  }
-
-  return kb
+  return new Keyboard()
+    .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
     .row()
     .text('📦 Buyurtmalarim')
     .text('📍 Manzilni yangilash')
@@ -119,6 +108,15 @@ function getMainMenuKeyboard(userData: BotUserData) {
     .text('📱 Raqamni yangilash')
     .text('☎️ Yordam')
     .resized()
+}
+
+function getInlineMenuKeyboard(userData: BotUserData) {
+  const webAppUrl = buildWebAppUrl(userData)
+  return new InlineKeyboard()
+    .webApp('🍽 Menyuni ochish (Mini App)', webAppUrl)
+    .row()
+    .text('📦 Buyurtmalarim', 'my_orders')
+    .text('☎️ Yordam', 'help')
 }
 
 // 1. /start command
@@ -152,64 +150,66 @@ bot.command('start', async ctx => {
       },
     })
   } catch (err) {
-    // Graceful fallback for local development without active PostgreSQL
+    // Graceful fallback
   }
 
-  // Case A: User has not provided phone number yet
+  const appUrl = buildWebAppUrl(userData)
+
+  // Configure persistent chat menu button
+  try {
+    await ctx.api.setChatMenuButton({
+      chat_id: user.id,
+      menu_button: {
+        type: 'web_app',
+        text: '🍽 Menyuni ochish',
+        web_app: { url: appUrl },
+      },
+    })
+  } catch (e) {
+    // Ignore if not supported
+  }
+
+  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>«TEZKOR TAOM NAMANGAN»</b> yetkazib berish xizmati botiga xush kelibsiz!\n\nBizda eng sara to'y oshi, shashliklar, somsa va fast food taomlarini to'g'ridan-to'g'ri Telegram ilovasi orqali tezkor buyurtma qilishingiz mumkin.\n\n👇 <b>Quyidagi tugmani bosing va menyuni oching:</b>`
+
   if (!userData.phone) {
     userData.step = 'awaiting_phone'
     saveBotUser(userData)
-
-    const promptText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>TT Namangan — Milliy va Fast Food</b> yetkazib berish xizmati botiga xush kelibsiz!\n\nBuyurtma berishni boshlash uchun, iltimos, avval telefon raqamingizni yuboring (quyidagi tugmani bosing):`
-
-    await ctx.reply(promptText, {
+    await ctx.reply(welcomeText, {
       parse_mode: 'HTML',
-      reply_markup: getPhoneKeyboard(),
+      reply_markup: getPhoneKeyboard(appUrl),
+    })
+    await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
+      parse_mode: 'HTML',
+      reply_markup: getInlineMenuKeyboard(userData),
     })
     return
   }
 
-  // Case B: User has phone but not location
   if (!userData.address && !userData.lat) {
     userData.step = 'awaiting_location'
     saveBotUser(userData)
-
-    const promptLocation = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\nTelefon raqamingiz: <b>${userData.phone}</b> ✅\n\nTaomlarni yetkazib berishimiz uchun, iltimos, joylashuvingizni (geolokatsiya) yuboring yoki manzilni yozma xabar sifatida yuboring:`
-
-    await ctx.reply(promptLocation, {
+    await ctx.reply(welcomeText, {
       parse_mode: 'HTML',
-      reply_markup: getLocationKeyboard(),
+      reply_markup: getLocationKeyboard(appUrl),
+    })
+    await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
+      parse_mode: 'HTML',
+      reply_markup: getInlineMenuKeyboard(userData),
     })
     return
   }
 
-  // Case C: User is fully registered
   userData.step = 'registered'
   saveBotUser(userData)
-
-  const welcomeText = `Assalomu alaykum, <b>${user.first_name}</b>! 🍽\n\n<b>TT Namangan</b> yetkazib berish xizmati bilan eng sara to'y oshi, shashliklar, somsa va fast food taomlarini tezkor buyurtma qilishingiz mumkin.\n\n📱 Telefon: <b>${userData.phone}</b>\n📍 Manzil: <b>${userData.address || 'Namangan shahri'}</b>\n\nMenyuni ochish va buyurtma berish uchun quyidagi tugmani bosing:`
 
   await ctx.reply(welcomeText, {
     parse_mode: 'HTML',
     reply_markup: getMainMenuKeyboard(userData),
   })
-
-  // Try updating the chat menu button so it persistently displays next to the input
-  const appUrl = buildWebAppUrl(userData)
-  if (appUrl.startsWith('https://')) {
-    try {
-      await ctx.api.setChatMenuButton({
-        chat_id: user.id,
-        menu_button: {
-          type: 'web_app',
-          text: '🍽 Buyurtma berish',
-          web_app: { url: appUrl },
-        },
-      })
-    } catch (e) {
-      // Ignore if not supported in test environment
-    }
-  }
+  await ctx.reply('🍽 <b>Tezkor Taom Mini Ilovasi:</b>', {
+    parse_mode: 'HTML',
+    reply_markup: getInlineMenuKeyboard(userData),
+  })
 })
 
 // 2. Handle Contact (Phone Number)

@@ -375,20 +375,31 @@ const MENU_ITEMS = [
 export default function ProfileScreen({ navigate, user, orders, favoritesCount, userPhone, userLocation }: ProfileProps) {
   const displayName = user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Mijoz'
   const displayContact = userPhone || (user?.username ? `@${user.username}` : '+998 90 123 45 67')
-  const avatarUrl = user?.photo_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&auto=format"
   const orderCount = orders ? orders.length : 12
 
   return (
     <div className="bg-surface-2 min-h-full">
       <div className="bg-surface px-5 pt-12 pb-6">
-        <h1 className="text-txt-1 font-extrabold text-2xl mb-5">Profil</h1>
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-txt-1 font-extrabold text-2xl">Profil</h1>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-light border border-primary/20">
+            <img src="/logo.jpg" alt="Tezkor Taom" className="w-5 h-5 rounded-full object-cover" />
+            <span className="text-primary text-xs font-bold tracking-tight">Tezkor Taom</span>
+          </div>
+        </div>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full overflow-hidden bg-primary-light">
-            <img
-              src={avatarUrl}
-              alt="Profile"
-              className="w-full h-full object-cover"
-            />
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-primary-light border-2 border-primary/20 flex items-center justify-center shadow-xs">
+            {user?.photo_url ? (
+              <img
+                src={user.photo_url}
+                alt={displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary to-orange-600 text-white font-black text-2xl flex items-center justify-center">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-txt-1 font-extrabold text-xl">{displayName}</div>

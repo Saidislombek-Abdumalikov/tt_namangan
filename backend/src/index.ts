@@ -22,7 +22,7 @@ app.use(express.json({ limit: '20mb' }))
 app.use(express.urlencoded({ extended: true, limit: '20mb' }))
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'ok',
     service: 'tt-namangan-backend',
@@ -31,20 +31,23 @@ app.get('/api/health', (req, res) => {
 })
 
 // Routes
-app.use('/api/auth', authRouter)
-app.use('/api/categories', categoriesRouter)
-app.use('/api/products', productsRouter)
-app.use('/api/orders', ordersRouter)
-app.use('/api/admin', adminRouter)
+app.use(['/api/auth', '/auth'], authRouter)
+app.use(['/api/categories', '/categories'], categoriesRouter)
+app.use(['/api/products', '/products'], productsRouter)
+app.use(['/api/orders', '/orders'], ordersRouter)
+app.use(['/api/admin', '/admin'], adminRouter)
 
 // Webhook route for Telegram Bot on Vercel / serverless
-app.use('/api/bot', webhookCallback(bot, 'express'))
+const isVercel = Boolean(process.env.VERCEL)
+if (isVercel) {
+  app.use(['/api/bot', '/bot'], webhookCallback(bot, 'express'))
+}
 
 export default app
 export { app }
 
 // Start Express Server locally (skip in Vercel serverless environment)
-if (!process.env.VERCEL) {
+if (!isVercel) {
   const server = app.listen(config.port, () => {
     console.log(`🚀 Namangan Food Backend is running on port ${config.port}`)
     console.log(`📡 Health check: http://localhost:${config.port}/api/health`)
