@@ -141,7 +141,7 @@ export default function OrderTracking({ navigate, currentOrder }: OrderTrackingP
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-txt-1 font-bold text-sm">🚚 Kuryeringiz</h3>
               <span className="text-success text-xs font-semibold bg-success-light px-2.5 py-1 rounded-full">
-                {order.status === 'delivering' ? 'Yoʻlda' : 'Biriktirilgan'}
+                {(order.status as string) === 'delivering' || (order.status as string) === 'on_the_way' ? 'Yoʻlda' : 'Biriktirilgan'}
               </span>
             </div>
             <div className="flex items-center gap-3">
