@@ -1,4 +1,6 @@
-import app from './_app.cjs';
+import cjsModule from './_app.cjs';
+
+const app = cjsModule.default?.default || cjsModule.default || cjsModule;
 
 export default function handler(req, res) {
   const matched = req.headers['x-matched-path'];
