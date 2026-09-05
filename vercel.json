@@ -1,6 +1,4 @@
 {
-  "installCommand": "npm install --include=dev",
-  "buildCommand": "prisma generate && vite build",
   "rewrites": [
     {
       "source": "/api/(.*)",
