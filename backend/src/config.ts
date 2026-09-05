@@ -1,17 +1,37 @@
 import dotenv from 'dotenv'
-import path from 'path'
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') })
+// Guarantee essential production environment variables
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL =
+    'postgresql://postgres:Saidislom*2008@db.zogqpyaqltjmtczvahmz.supabase.co:5432/postgres'
+}
+if (!process.env.BOT_TOKEN) {
+  process.env.BOT_TOKEN = '8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE'
+}
+if (!process.env.TELEGRAM_ORDERS_CHAT_ID) {
+  process.env.TELEGRAM_ORDERS_CHAT_ID = '-1003901925817'
+}
+if (!process.env.WEBAPP_URL) {
+  process.env.WEBAPP_URL = 'https://tt-namangan.vercel.app'
+}
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'namangan_secret_super_secure_jwt_token_key_2026'
+}
+
+try {
+  dotenv.config()
+} catch {
+  // Ignore in serverless
+}
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:Saidislom*2008@db.zogqpyaqltjmtczvahmz.supabase.co:5432/postgres',
-  botToken: process.env.BOT_TOKEN || '8934194891:AAEMFHYLIUaQjLT40QgfS5X8tGOtAoGHjlE',
-  ordersChatId: process.env.TELEGRAM_ORDERS_CHAT_ID || '-1003901925817',
-  webAppUrl: process.env.WEBAPP_URL || 'https://tt-namangan.vercel.app',
-  jwtSecret: process.env.JWT_SECRET || 'namangan_secret_super_secure_jwt_token_key_2026',
+  databaseUrl: process.env.DATABASE_URL,
+  botToken: process.env.BOT_TOKEN,
+  ordersChatId: process.env.TELEGRAM_ORDERS_CHAT_ID,
+  webAppUrl: process.env.WEBAPP_URL,
+  jwtSecret: process.env.JWT_SECRET,
 }
+
 

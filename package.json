@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postinstall": "prisma generate --schema=./backend/prisma/schema.prisma || true",
+    "postinstall": "prisma generate || true",
     "preview": "vite preview",
     "format": "oxfmt"
   },

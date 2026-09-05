@@ -1,52 +1,13 @@
-import express from 'express'
-import cors from 'cors'
+import { app } from './app'
 import { config } from './config'
-import { authRouter } from './routes/auth'
-import { categoriesRouter } from './routes/categories'
-import { productsRouter } from './routes/products'
-import { ordersRouter } from './routes/orders'
-import { adminRouter } from './routes/admin'
 import { bot } from './bot/bot'
-import { webhookCallback } from 'grammy'
-
-// Support BigInt serialization in JSON responses
-;(BigInt.prototype as any).toJSON = function () {
-  return this.toString()
-}
-
-const app = express()
-
-// Middlewares
-app.use(cors({ origin: true, credentials: true }))
-app.use(express.json({ limit: '20mb' }))
-app.use(express.urlencoded({ extended: true, limit: '20mb' }))
-
-// Health check
-app.get(['/api/health', '/health'], (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'tt-namangan-backend',
-    timestamp: new Date().toISOString(),
-  })
-})
-
-// Routes
-app.use(['/api/auth', '/auth'], authRouter)
-app.use(['/api/categories', '/categories'], categoriesRouter)
-app.use(['/api/products', '/products'], productsRouter)
-app.use(['/api/orders', '/orders'], ordersRouter)
-app.use(['/api/admin', '/admin'], adminRouter)
-
-// Webhook route for Telegram Bot on Vercel / serverless
-const isVercel = Boolean(process.env.VERCEL)
-if (isVercel) {
-  app.use(['/api/bot', '/bot'], webhookCallback(bot, 'express'))
-}
 
 export default app
 export { app }
 
-// Start Express Server locally (skip in Vercel serverless environment)
+const isVercel = Boolean(process.env.VERCEL)
+
+// Start Express Server and Bot polling locally (skip in Vercel serverless environment)
 if (!isVercel) {
   const server = app.listen(config.port, () => {
     console.log(`🚀 Namangan Food Backend is running on port ${config.port}`)
@@ -66,7 +27,9 @@ if (!isVercel) {
               web_app: { url: config.webAppUrl || 'https://tt-namangan.vercel.app' },
             },
           })
-          console.log(`✅ Telegram global menu button set to: ${config.webAppUrl || 'https://tt-namangan.vercel.app'}`)
+          console.log(
+            `✅ Telegram global menu button set to: ${config.webAppUrl || 'https://tt-namangan.vercel.app'}`
+          )
         } catch (e) {
           console.warn('Could not set global menu button:', e)
         }

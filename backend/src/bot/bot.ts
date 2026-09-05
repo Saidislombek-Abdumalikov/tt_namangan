@@ -15,6 +15,19 @@ bot.catch(err => {
   console.error(`Error in bot while handling update ${err.ctx?.update?.update_id}:`, err.error)
 })
 
+// Logging middleware
+bot.use(async (ctx, next) => {
+  const updateType = ctx.message
+    ? `message (${ctx.message.text || 'media/contact'})`
+    : ctx.callbackQuery
+    ? `callback (${ctx.callbackQuery.data})`
+    : 'other'
+  console.log(
+    `🤖 Bot update ${ctx.update.update_id} [${updateType}] from ${ctx.from?.id} (${ctx.from?.first_name || 'User'})`
+  )
+  await next()
+})
+
 // Persistent Local User Cache so the bot works seamlessly in any environment
 export interface BotUserData {
   telegramId: number
@@ -28,7 +41,7 @@ export interface BotUserData {
   step?: 'awaiting_phone' | 'awaiting_location' | 'registered'
 }
 
-const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.resolve(__dirname, '../../data')
+const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.resolve(process.cwd(), 'data')
 const USERS_FILE = path.join(DATA_DIR, 'bot_users.json')
 
 function loadBotUsers(): Record<string, BotUserData> {
