@@ -322,32 +322,56 @@ interface HelpProps {
 }
 
 export function HelpScreen({ navigate }: HelpProps) {
-  const items = [
-    { icon: '☎️', label: 'Operator bilan bog\'lanish', sub: 'Ish vaqti: 09:00 – 22:00' },
-    { icon: '📦', label: 'Buyurtma bo\'yicha yordam', sub: 'Muammo bormi? Yordam beramiz' },
-    { icon: '❓', label: "Ko'p so'raladigan savollar", sub: 'Tez-tez beriladigan savollar' },
-  ]
   return (
     <div className="bg-surface-2 min-h-full">
       <div className="bg-surface px-5 pt-12 pb-4 flex items-center gap-4">
         <button onClick={() => navigate('profile')} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-2">
           <ArrowLeft size={20} className="text-txt-1" />
         </button>
-        <h1 className="text-txt-1 font-extrabold text-xl">Yordam</h1>
+        <h1 className="text-txt-1 font-extrabold text-xl">Yordam va Aloqa</h1>
       </div>
-      <div className="px-4 pt-3 pb-4 space-y-2">
-        {items.map((item, i) => (
-          <button key={i} className="w-full bg-surface rounded-2xl border border-bdr p-4 flex items-center gap-4 text-left">
-            <div className="w-12 h-12 bg-surface-2 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-              {item.icon}
-            </div>
-            <div className="flex-1">
-              <div className="text-txt-1 font-bold text-sm">{item.label}</div>
-              <div className="text-txt-2 text-xs mt-0.5">{item.sub}</div>
-            </div>
-            <ChevronRight size={16} className="text-txt-3" />
-          </button>
-        ))}
+      <div className="px-4 pt-3 pb-4 space-y-3">
+        <a
+          href="tel:+998336755550"
+          className="w-full bg-surface rounded-2xl border border-bdr p-4 flex items-center gap-4 text-left shadow-xs hover:border-primary transition-colors block"
+        >
+          <div className="w-12 h-12 bg-primary-light rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 text-primary">
+            📞
+          </div>
+          <div className="flex-1">
+            <div className="text-txt-1 font-bold text-sm">Buyurtma va Operator</div>
+            <div className="text-primary font-bold text-xs mt-0.5">(33) 675-55-50</div>
+            <div className="text-txt-3 text-[11px]">Ish vaqti: Har kuni 09:00 – 23:00</div>
+          </div>
+          <ChevronRight size={16} className="text-txt-3" />
+        </a>
+
+        <a
+          href="https://t.me/tezkorburger"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full bg-surface rounded-2xl border border-bdr p-4 flex items-center gap-4 text-left shadow-xs hover:border-primary transition-colors block"
+        >
+          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
+            ✈️
+          </div>
+          <div className="flex-1">
+            <div className="text-txt-1 font-bold text-sm">Telegram kanal va qo'llab-quvvatlash</div>
+            <div className="text-blue-600 font-bold text-xs mt-0.5">@tezkorburger</div>
+            <div className="text-txt-3 text-[11px]">Yangiliklar, aksiyalar va tezkor yordam</div>
+          </div>
+          <ChevronRight size={16} className="text-txt-3" />
+        </a>
+
+        <div className="bg-surface rounded-2xl border border-bdr p-4 flex items-center gap-4 text-left">
+          <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
+            ⚡
+          </div>
+          <div className="flex-1">
+            <div className="text-txt-1 font-bold text-sm">Yetkazib berish xizmati</div>
+            <div className="text-txt-2 text-xs mt-0.5">Namangan shahri bo'ylab yetkazib berish: 10 000 so'm</div>
+          </div>
+        </div>
       </div>
     </div>
   )

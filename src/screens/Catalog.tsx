@@ -13,37 +13,41 @@ interface CatalogProps {
 }
 
 const CATEGORY_META: Record<string, { image: string; desc: string }> = {
+  kombo: {
+    image: 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=600&h=400&fit=crop',
+    desc: "Do'stlar, radnoylar va oilaviy kombolar",
+  },
+  lavash: {
+    image: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=600&h=400&fit=crop',
+    desc: "Mol va tovuq go'shtli tandir lavashlar",
+  },
+  burger: {
+    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&h=400&fit=crop',
+    desc: "Gamburger, cheeseburger, TT burger va doner",
+  },
+  hotdog: {
+    image: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=600&h=400&fit=crop',
+    desc: "Kanadskiy, amerikano, mangal hot-doglar",
+  },
   osh: {
-    image: 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=600&h=400&fit=crop&auto=format',
+    image: 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=600&h=400&fit=crop',
     desc: "To'y oshi, choyxona palov",
   },
   shashlik: {
-    image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&h=400&fit=crop&auto=format',
+    image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&h=400&fit=crop',
     desc: "Qo'y va qiyma mangal shashliklar",
   },
   somsa: {
-    image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop&auto=format',
-    desc: "Issiq tandir somsalari",
+    image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop',
+    desc: "Issiq tandir go'shtli somsalar",
   },
   milliy: {
-    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&h=400&fit=crop&auto=format',
-    desc: "Qozon kabob, manti, sho'rva",
-  },
-  lagmon: {
-    image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&h=400&fit=crop&auto=format',
-    desc: "Cho'zma va qovurma lag'mon",
-  },
-  fastfood: {
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&h=400&fit=crop&auto=format',
-    desc: "Pitsa, burger, tovuqli lavash",
+    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&h=400&fit=crop',
+    desc: "Qozon kabob va milliy taomlar",
   },
   ichimliklar: {
-    image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&h=400&fit=crop&auto=format',
+    image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&h=400&fit=crop',
     desc: "Muzdek ichimliklar va choylar",
-  },
-  shirinliklar: {
-    image: 'https://images.unsplash.com/photo-1519676867240-f03562e64548?w=600&h=400&fit=crop&auto=format',
-    desc: "Namangan paxlavasi va tortlar",
   },
 }
 
